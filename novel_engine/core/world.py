@@ -13,6 +13,7 @@ class Character:
         self.skills = [loader.skills.get_skill_name() for _ in range(random.randint(1, 3))]
         self.sect = loader.sects.get_sect_name()
         self.inventory = [loader.items.get_item_name() for _ in range(random.randint(0, 2))]
+        self.spirit_stones = random.randint(0, 100) # Economy system
         self.titles = []
         
         # Personality traits for dialogue generation
@@ -20,10 +21,11 @@ class Character:
         self.cunning = random.random()
         
         if is_protagonist:
-            self.name = "叶凌天" # Hardcoded for continuity or could be random
-            self.arrogance = 0.5 # MC is usually low-key then high-profile
+            self.name = "叶凌天" 
+            self.arrogance = 0.5 
             self.max_hp = 1000
-            self.attack = 50 # Cheater stats
+            self.attack = 50 
+            self.spirit_stones = 0 # Start poor, get rich later
             self.inventory.append("神秘小瓶")
             self.titles.append("穿越者")
 
@@ -36,6 +38,11 @@ class Character:
         new_skill = loader.skills.get_skill_name()
         self.skills.append(new_skill)
         return new_skill
+
+    def add_loot(self, items, stones):
+        self.inventory.extend(items)
+        self.spirit_stones += stones
+
 
     def get_dialogue(self, context="provoke"):
         if context == "provoke":
