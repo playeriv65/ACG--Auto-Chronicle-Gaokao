@@ -1,0 +1,16 @@
+{
+    "api": {
+        "base_url": "https://integrate.api.nvidia.com/v1",
+        "api_key": "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",
+        "model": "z-ai/glm4.7",
+        "max_tokens": 4096,
+        "temperature": 0.8
+    },
+    "novel": {
+        "title": "《赛博修仙：算力证道》",
+        "target_chars": 1000000,
+        "output_file": "generated_novel_v5_pro.txt",
+        "save_state_file": "save_state_v5.json"
+    },
+    "system_prompt": "你是一个网文大神。请根据大纲写出高潮迭起的正文。要求：\n1. 严禁断章，必须写完一个完整场景。\n2. 若字数超限，请确保在句号或引号处结尾。\n3. 多用短句，节奏极快。\n4. 必须包含‘恐怖如斯’、‘此子断不可留’等经典语录。"
+}
