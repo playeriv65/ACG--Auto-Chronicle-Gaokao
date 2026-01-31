@@ -1,184 +1,199 @@
 import random
+import math
 from novel_engine.data.database import SkillTree, EventLibrary, NPCData, Subject
+from novel_engine.data.curriculum_data import Curriculum
+from novel_engine.data.quiz_data import QuizDatabase
 
 class Person:
-    def __init__(self, name, role, tags):
-        self.name = name
-        self.role = role 
-        self.tags = tags 
-        # 基础属性 (天赋)
-        self.talent = {s: random.randint(80, 150) for s in Subject.ALL}
-        if "卷王" in tags: self.talent = {k:v*0.9 for k,v in self.talent.items()} # 卷王靠努力
-        if "天赋怪" in tags: self.talent = {k:v*1.5 for k,v in self.talent.items()}
+    def __init__(self, name, role, tags, gender="男"):
+        self.name, self.role, self.tags, self.gender = name, role, tags, gender
+        self.family = random.choice(NPCData.FAMILIES)
+        self.quirk = random.choice(NPCData.QUIRKS)
+        self.flaw = random.choice(NPCData.FLAWS)
         
-        # 当前能力值 (技能熟练度) - 初始值
-        self.mastery = {s: random.randint(500, 2000) for s in Subject.ALL}
+        if role == "主角":
+            self.talent = {s: 100 for s in Subject.ALL}; self.talent[Subject.INFO] = 250
+            self.mastery = {s: random.randint(100, 400) for s in Subject.ALL}; self.mastery[Subject.INFO] = 0
+        else:
+            if "天赋怪" in tags or "卷王" in tags:
+                self.talent = {s: random.randint(120, 180) for s in Subject.ALL}
+                self.mastery = {s: random.randint(2000, 3500) for s in Subject.ALL}
+            else:
+                self.talent = {s: random.randint(90, 130) for s in Subject.ALL}
+                self.mastery = {s: random.randint(800, 1500) for s in Subject.ALL}
         
-        self.skills = [] 
-        self.mood = 50
-        self.stress = 0
-        self.fatigue = 0
-        
-        # 记忆/历史
-        self.last_week_rank = 0
-        self.current_rank = 0
-        self.focus_subject = Subject.MATH # 当前主攻科目
+        self.last_mastery = self.mastery.copy()
+        self.skills = []
+        self.mood, self.stress, self.fatigue = 50, 0, 0
+        self.focus_subject, self.last_week_rank = Subject.MATH, 0
+
+    def to_dict(self):
+        # 排除掉 Subject 这种非 JSON 序列化的对象，或者将其转换为字符串
+        data = self.__dict__.copy()
+        data['mastery'] = {str(k): v for k, v in self.mastery.items()}
+        data['talent'] = {str(k): v for k, v in self.talent.items()}
+        data['focus_subject'] = str(self.focus_subject)
+        # last_mastery 也可以同样处理
+        data['last_mastery'] = {str(k): v for k, v in self.last_mastery.items()}
+        return data
+
+    @staticmethod
+    def from_dict(data):
+        p = Person(data["name"], data["role"], data["tags"], data["gender"])
+        # 这里需要将字符串形式的 key 还原为 Subject 枚举，或者直接用原始数据（如果逻辑兼容）
+        # 为了稳定，我们直接覆盖属性
+        for k, v in data.items():
+            setattr(p, k, v)
+        return p
 
     def get_exam_score(self, subject):
-        # 考试分 = 熟练度 * (1 + 天赋修正) * 状态修正 - 随机波动
-        base = self.mastery[subject]
-        talent_mod = self.talent[subject] / 100
-        
-        # 状态影响：压力过大(>80)或疲劳过大(>80)会导致发挥失常
-        state_mod = 1.0
-        if self.stress > 80: state_mod -= 0.2
-        if self.fatigue > 80: state_mod -= 0.2
-        if self.mood > 80: state_mod += 0.1
-        
-        # 技能加成
-        skill_bonus = sum([lvl * 50 for n, lvl, d in self.skills if subject in n])
-        
-        score = (base + skill_bonus) * talent_mod * state_mod
-        # 归一化到 0-150 (假设 5000 熟练度对应 150 分)
-        final_score = int(score / 50)
-        return max(0, min(150, final_score))
+        base = self.mastery.get(subject, self.mastery.get(str(subject), 0))
+        penalty = (self.stress + self.fatigue) / 400 
+        talent_mod = self.talent.get(subject, self.talent.get(str(subject), 100)) / 100
+        skill_bonus = sum([100 for n, lvl, d in self.skills if subject in n])
+        score = (base + skill_bonus) * talent_mod * (1 - penalty)
+        return int(min(150, score / 50))
 
-    def plan_week(self, is_exam_coming):
-        # AI 决策本周干什么
+    def plan_week(self, is_exam_coming, current_week=1, schedule_content=None):
+        # (保持 Turn 25 的逻辑)
         if is_exam_coming:
-            # 备考模式：补弱科
-            scores = {s: self.mastery[s] for s in Subject.ALL}
+            scores = {s: self.mastery.get(s, self.mastery.get(str(s), 0)) for s in Subject.ALL if s != Subject.INFO}
             self.focus_subject = min(scores, key=scores.get)
-            self.stress += 10
+            self.stress += 15
+        elif schedule_content:
+            priority = [Subject.MATH, Subject.PHYS, Subject.CHEM, Subject.BIO, Subject.ENG, Subject.CHN]
+            for s in priority:
+                if s in schedule_content: self.focus_subject = s; break
         else:
-            # 日常模式：随机或按性格
-            if "偏科狂" in self.tags or "信奥党" in self.tags:
-                self.focus_subject = Subject.INFO if "信奥党" in self.tags else Subject.MATH
-            else:
-                self.focus_subject = random.choice(Subject.ALL)
-                
-    def execute_week(self):
-        # 执行成长
-        growth = self.talent[self.focus_subject] * 2 # 基础成长
-        
-        if "卷王" in self.tags:
-            growth *= 1.5
-            self.fatigue += 20
-        elif "天赋怪" in self.tags:
-            if random.random() < 0.5: # 经常偷懒
-                growth = 0
-                self.mood += 20
-                self.stress -= 10
-            else:
-                growth *= 2.0 # 稍微学一下就很快
-        
-        self.mastery[self.focus_subject] += growth
-        self.fatigue += 5
-        
-        # 疲劳恢复机制
+            if current_week > 10 and "信奥党" in self.tags: self.focus_subject = Subject.INFO
+            else: self.focus_subject = random.choice([s for s in Subject.ALL if s != Subject.INFO])
+
+    def execute_week(self, current_week=1, schedule_content=None):
+        self.last_mastery = self.mastery.copy()
+        def calc_growth(subj):
+            current = self.mastery.get(subj, self.mastery.get(str(subj), 0))
+            base_growth = self.talent.get(subj, self.talent.get(str(subj), 100)) * 4
+            inhibition = 1.0 / (math.log10(current + 10) / 2.0)
+            growth = base_growth * inhibition
+            if "卷王" in self.tags: growth *= 1.3
+            if self.role == "主角" and subj == Subject.INFO: growth *= 2.0
+            return growth
+        g = calc_growth(self.focus_subject)
+        self.mastery[self.focus_subject] = self.mastery.get(self.focus_subject, self.mastery.get(str(self.focus_subject), 0)) + g
+        self.fatigue += 10
+        for s in Subject.ALL:
+            if s != self.focus_subject:
+                self.mastery[s] = self.mastery.get(s, self.mastery.get(str(s), 0)) + calc_growth(s) * 0.2
         if self.fatigue > 90:
-            self.fatigue = 0 # 强制休息一周
-            self.mastery = {k:v*0.98 for k,v in self.mastery.items()} # 逆水行舟
-            return f"{self.name}因疲劳过度病倒了，本周在宿舍躺平。"
-            
-        return f"{self.name}主攻{self.focus_subject}，熟练度+{int(growth)}。"
+            self.fatigue = 40; self.mastery = {k:v*0.95 for k,v in self.mastery.items()}
+            return f"{self.name}病倒了。"
+        return f"{self.name}主修{self.focus_subject}。"
+
+    def get_growth_report(self):
+        return "Values Updated" # 简化版
+
+    def get_soul_desc(self):
+        return f"[{self.family}, {self.flaw}, 喜欢{self.quirk}]"
 
 class BeingEngine:
     def __init__(self):
-        self.students = []
-        self.teachers = []
-        self.protagonist = None
+        self.students, self.teachers, self.protagonist = [], [], None
+        self.rankings, self.global_cooldowns = [], {}
+        self.year, self.semester = 1, 1
         self.init_world()
-        self.event_pool = EventLibrary.COMMON + EventLibrary.RARE + EventLibrary.EPIC
-        
-        self.week_cycle = 0 # 0:Normal, 1:Prep, 2:Exam, 3:Result
+        self.event_pool = EventLibrary.EVENTS
+
+    def to_dict(self):
+        return {"students": [s.to_dict() for s in self.students], "teachers": [t.to_dict() for t in self.teachers], "global_cooldowns": self.global_cooldowns, "year": self.year, "semester": self.semester}
+
+    def from_dict(self, data):
+        self.students = [Person.from_dict(s) for s in data["students"]]
+        self.teachers = [Person.from_dict(t) for t in data["teachers"]]
+        self.protagonist = next((s for s in self.students if s.role == "主角"), self.students[0])
+        self.global_cooldowns, self.year, self.semester = data["global_cooldowns"], data["year"], data["semester"]
 
     def init_world(self):
-        # 初始化 30 人 (逻辑保持不变，复用之前的代码结构，但实例化新的 Person)
-        # 1. 主角
-        self.protagonist = Person("叶凌天", "主角", ["做题家", "信奥党"])
-        self.protagonist.talent = {s: 100 for s in Subject.ALL} # 平庸开局
-        self.protagonist.talent[Subject.INFO] = 200 # 金手指
+        self.protagonist = Person("叶凌天", "主角", ["做题家"], gender="男")
         self.students.append(self.protagonist)
-        
-        # 2. 生成29个同学
-        used_names = set()
-        for i in range(29):
-            is_male = random.random() < 0.6 
-            name_pool = NPCData.NAMES_MALE if is_male else NPCData.NAMES_FEMALE
-            name = random.choice(name_pool)
-            while name in used_names: name = random.choice(name_pool) + str(i)
-            used_names.add(name)
-            
-            arch_name, arch_desc, modifiers = random.choice(NPCData.ARCHETYPES)
-            p = Person(name, "同学", [arch_name])
-            self.students.append(p)
+        nemesis = Person("顾辞远", "同学", ["天赋怪", "卷王"], gender="男")
+        nemesis.mastery = {s: 4000 for s in Subject.ALL}
+        self.students.append(nemesis)
+        used = {"叶凌天", "顾辞远"}
+        for i in range(28):
+            is_male = random.random() < 0.5
+            name = random.choice(NPCData.SURNAMES) + random.choice(NPCData.STUDENT_NAMES_MALE if is_male else NPCData.STUDENT_NAMES_FEMALE)
+            while name in used: name = random.choice(NPCData.SURNAMES) + random.choice(NPCData.STUDENT_NAMES_MALE if is_male else NPCData.STUDENT_NAMES_FEMALE)
+            used.add(name)
+            self.students.append(Person(name, "同学", [random.choice(NPCData.ARCHETYPES)[0]], gender=("男" if is_male else "女")))
+        for subj, desc in NPCData.TEACHER_PROFILES:
+            name = random.choice(NPCData.SURNAMES) + random.choice(NPCData.TEACHER_NAMES_MALE)
+            self.teachers.append(Person(name + "老师", "老师", [subj]))
 
     def tick(self, week_idx):
         logs = []
-        
-        # 确定本周状态
         is_exam_week = (week_idx % 4 == 0)
-        is_prep_week = (week_idx % 4 == 3)
-        is_result_week = (week_idx % 4 == 1) and week_idx > 1
+        season = "SUMMER" if (week_idx % 20) < 10 else "WINTER"
+        week_content = Curriculum.get_weekly_content(self.year, self.semester, week_idx)
+        quiz_data = None
+        if "ALL" in week_content:
+            battle_type, battle_target = f"【{week_content['ALL']}】", "全科"
+        else:
+            boss_subj = next((s for s in [Subject.MATH, Subject.PHYS, Subject.CHEM] if s in week_content), Subject.MATH)
+            topic = week_content.get(boss_subj, "自习")
+            battle_type, battle_target = f"【周考·{boss_subj}：{topic}】", boss_subj
+            quiz_data = QuizDatabase.get_quiz(boss_subj, topic)
         
-        phase_name = "日常周"
-        if is_prep_week: phase_name = "备考周"
-        if is_exam_week: phase_name = "考试周"
-        if is_result_week: phase_name = "出分周"
-        
-        logs.append(f"【本周阶段】{phase_name}")
+        if week_idx == 11 and self.year == 1 and self.semester == 1:
+            self.protagonist.tags.append("信奥党"); logs.append("开启信奥之路。")
 
-        # 1. 全员规划与执行
         for s in self.students:
-            s.plan_week(is_exam_week or is_prep_week)
-            action_log = s.execute_week()
-            # 只有主角或特殊事件才记录详细日志，否则日志太长
-            # 这里我们不记录每个人的流水账，只记录突发事件
-        
-        # 2. 突发事件 (Focus Events)
-        # 挑选 3 个焦点人物
-        focus_students = random.sample(self.students, 3)
-        if self.protagonist not in focus_students: focus_students[0] = self.protagonist
-        
-        for s in focus_students:
-            evt = random.choice(self.event_pool)
-            _, desc, effect = evt
-            logs.append(f"【焦点人物】{s.name}({','.join(s.tags)}): {desc}")
+            s.plan_week(is_exam_week, current_week=week_idx, schedule_content=week_content)
+            s.execute_week(current_week=week_idx, schedule_content=week_content)
+            
+        focus = random.sample(self.students, 3)
+        if self.protagonist not in focus: focus[0] = self.protagonist
+        for s in focus:
+            desc, effect = self._select_valid_event(s, week_idx, season)
+            self.global_cooldowns[desc] = week_idx
             self._apply_effect(s, effect)
+            logs.append(f"【突发】{s.name}: {desc}")
+            if random.random() < (0.4 if s.role == "主角" else 0.1):
+                target_subj = random.choice(Subject.ALL)
+                skill_data = SkillTree.get_skill_by_subject(target_subj, s.mastery.get(target_subj, 0))
+                if skill_data and skill_data[0] not in [sk[0] for sk in s.skills]:
+                    s.skills.append(skill_data); logs.append(f"【突破】{s.name}领悟绝学「{skill_data[0]}」")
 
-        # 3. 考试结算逻辑
-        if is_exam_week:
-            self.calculate_rankings()
-            top3 = self.rankings[:3]
-            logs.append(f"【月考榜单】状元:{top3[0].name} 榜眼:{top3[1].name} 探花:{top3[2].name}")
-            
-            # 主角成绩
-            mc_rank = self.students.index(self.protagonist) + 1
-            logs.append(f"【主角战绩】全班第{mc_rank}名。")
-            
-            # 记录排名变化
-            for s in self.students:
-                s.last_week_rank = self.students.index(s) + 1
+        self.calculate_rankings()
+        mc = self.protagonist
+        mc_score = sum([mc.get_exam_score(s) for s in Subject.ALL if s != Subject.INFO]) if battle_target == "全科" else mc.get_exam_score(battle_target)
+        rival = self.students[0] if self.students[0] != mc else self.students[1]
+        rival_score = sum([rival.get_exam_score(s) for s in Subject.ALL if s != Subject.INFO]) if battle_target == "全科" else rival.get_exam_score(battle_target)
+        logs.append(f"【战报】主角 {mc_score} vs 榜首({rival.name}) {rival_score}")
+        for s in self.students: s.last_week_rank = self.students.index(s) + 1
+        return logs, battle_type, quiz_data
 
-        return logs, phase_name
-
-    def _apply_effect(self, p, effect_str):
-        # 简化版效果应用
-        if "mood+" in effect_str: p.mood += 10
-        if "mood-" in effect_str: p.mood -= 10
-        if "stress+" in effect_str: p.stress += 10
-        if "stress-" in effect_str: p.stress -= 10
-        if "mastery+" in effect_str: 
-            for s in Subject.ALL: p.mastery[s] += 50
+    def _select_valid_event(self, person, week, season):
+        candidates = [(d,e) for t,d,e in self.event_pool if (week - self.global_cooldowns.get(d,-99) >= 20) and (t in ["ANY", season])]
+        return random.choice(candidates) if candidates else ("发呆", "")
 
     def calculate_rankings(self):
-        # 按总分排序
         self.students.sort(key=lambda s: sum([s.get_exam_score(sub) for sub in Subject.ALL if sub != Subject.INFO]), reverse=True)
-        self.rankings = self.students # update cached list
+        self.rankings = self.students
+
+    def _apply_effect(self, p, effect):
+        if not effect: return
+        for part in effect.split(","):
+            if "mood+" in part: p.mood += 10
+            if "stress+" in part: p.stress += 10
+            if "all_mastery+" in part: 
+                for s in Subject.ALL: p.mastery[s] = p.mastery.get(s, 0) + 100
+
+    def get_rankings(self):
+        if not self.rankings: self.calculate_rankings()
+        return self.rankings
 
     def get_student_detail(self, name):
         s = next((x for x in self.students if x.name == name), None)
         if not s: return ""
-        scores = [f"{sub.value}:{s.get_exam_score(sub)}" for sub in Subject.ALL if sub != Subject.INFO]
-        return f"{s.name} | 状态:心情{s.mood}/压力{s.stress} | 强科:{s.focus_subject.value} | 成绩单: {', '.join(scores)}"
+        skill_list = " | ".join([sk[0] for sk in s.skills]) if s.skills else "无"
+        return f"{s.name}({s.gender}) | {s.get_soul_desc()} | 排名:{s.last_week_rank} | 修为:{int(sum([v for k,v in s.mastery.items() if isinstance(v, (int,float))]))} | 掌握技能:{skill_list}"

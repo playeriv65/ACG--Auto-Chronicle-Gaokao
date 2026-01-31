@@ -1,16 +1,17 @@
 {
     "api": {
         "base_url": "https://integrate.api.nvidia.com/v1",
-        "api_key": "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",
+        "api_key": "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",
         "model": "z-ai/glm4.7",
-        "max_tokens": 4096,
-        "temperature": 0.8
+        "max_tokens": 16384,
+        "temperature": 1.0,
+        "enable_thinking": true
     },
     "novel": {
-        "title": "《拮抗中学：双修编年史》",
-        "target_chars": 1000000,
+        "title": "《拮抗中学：众生相》",
+        "target_chars": 2000000,
         "output_file": "generated_novel.txt",
         "save_state_file": "save_state.json"
     },
-    "system_prompt": "（此字段将在运行时动态注入）"
+    "system_prompt": "你是一个顶级爽文作家，擅长【校园修仙/数据流】。背景：拮抗中学（分数即等级，题目即魔兽）。要求：单章4000字，武侠化描写解题过程，拒绝表格，叙事细腻，群像生动。"
 }
