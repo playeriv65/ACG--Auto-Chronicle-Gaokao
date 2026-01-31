@@ -1,26 +1,43 @@
 import random
 from enum import Enum
 from novel_engine.data.competition_data import CompSect, CompSkills
+from novel_engine.data.jiekang_loader import vocab
 
 class GameState(Enum):
     NORMAL = "日常修行"
     EXAM_PREP = "闭关备考"
-    EXAM_COMBAT = "月考大战"
-    COMP_TRAINING = "竞赛特训"
-    COMP_BATTLE = "竞赛决战"
-    SLUMP = "走火入魔" # 成绩下滑/心态崩了
+    EXAM_COMBAT = "正道试炼"
+    COMP_TRAINING = "旁门潜修"
+    COMP_BATTLE = "魔教征伐"
+    SLUMP = "走火入魔"
     HOLIDAY = "云游修整"
+    CONFLICT = "道心抉择"
+
+class NPC:
+    def __init__(self, name, sect, archetype, base_score):
+        self.name = name
+        self.sect = sect
+        self.archetype = archetype
+        self.score = base_score
+        
+    def update(self, year):
+        # Diminishing returns for genius
+        growth_cap = 750
+        if self.score >= growth_cap: return
+        
+        factor = 1.0 if year == 1 else 0.5
+        growth = random.randint(0, 8) * factor
+        self.score += growth
 
 class StudentProfile:
     def __init__(self):
-        self.gaokao_score = 450 # 基础分
-        self.comp_score = 0 # 竞赛积分
+        self.gaokao_score = 450 
+        self.comp_score = 0 
         self.sanity = 100
         self.energy = 100
-        self.reputation = 50 # 老师好感度
-        self.comp_sect = CompSect.INFO # 默认加入寒克武（最惨的）
-        self.comp_rank = 0 # 0:无, 1:省一, 2:国决, 3:集训队, 4:金牌
-        self.buffs = []
+        self.reputation = 50 
+        self.comp_sect = CompSect.INFO
+        self.comp_rank = 0 
 
 class DualFSM:
     def __init__(self):
@@ -32,65 +49,53 @@ class DualFSM:
         self.profile = StudentProfile()
         self.history_log = []
         
-        # Timeline Triggers
-        self.comp_start_week = (1, 1, 11) # Y1 S1 W11 (Mid-term after)
-        self.comp_end_week = (3, 1, 15)   # Y3 S1 W15 (End of road)
+        self.npcs = [
+            NPC("林清北", "全能", "天才", 600),
+            NPC("苏小狸", "寒克武", "竞赛党", 400), 
+        ]
+        
+        self.comp_start_week = (1, 1, 11) 
+        self.comp_end_week = (3, 1, 15)
 
     def is_comp_active(self):
-        # 简单的周数转换逻辑
         current_abs_week = (self.year - 1) * 40 + (self.semester - 1) * 20 + self.week
         start_abs = (self.comp_start_week[0] - 1) * 40 + (self.comp_start_week[1] - 1) * 20 + self.comp_start_week[2]
         end_abs = (self.comp_end_week[0] - 1) * 40 + (self.comp_end_week[1] - 1) * 20 + self.comp_end_week[2]
-        
-        # 只有在 active 期间，且没有保送/退役才算
         return start_abs <= current_abs_week <= end_abs and self.profile.comp_rank < 4
 
     def tick(self):
-        # 1. 状态重置
         self.profile.energy = 100
         event_desc = ""
-        conflict = False
-        
-        # 2. 时间推进逻辑
+        self.state = GameState.NORMAL
         date_str = f"高{self.year}{'上' if self.semester==1 else '下'} 第{self.week}周"
         
-        # 3. 强制事件检测 (Main Thread)
-        main_event = self._check_main_events()
+        for npc in self.npcs: npc.update(self.year)
         
-        # 4. 竞赛事件检测 (Sub Thread)
-        sub_event = None
-        if self.is_comp_active():
-            sub_event = self._check_comp_events()
+        main_event = self._check_main_events()
+        sub_event = self._check_comp_events() if self.is_comp_active() else None
 
-        # 5. 状态机决策 (Decision Making)
         if main_event and sub_event:
-            # 冲突！修罗场！
-            self.state = GameState.COMP_BATTLE
-            conflict = True
+            self.state = GameState.CONFLICT
             event_desc = self._resolve_conflict(main_event, sub_event)
         elif main_event:
-            self.state = GameState.EXAM_COMBAT if "考" in main_event else GameState.NORMAL
+            self.state = GameState.EXAM_COMBAT
             event_desc = self._handle_main(main_event)
         elif sub_event:
             self.state = GameState.COMP_BATTLE if "赛" in sub_event else GameState.COMP_TRAINING
             event_desc = self._handle_sub(sub_event)
         else:
-            # 无特殊事件，根据策略日常挂机
+            self.state = GameState.NORMAL
             event_desc = self._daily_grind()
 
-        # 6. 结算属性
-        self._update_stats()
-        
-        # 7. 记录
+        rival = self.npcs[0]
         log_entry = {
             "date": date_str,
             "state": self.state.value,
             "event": event_desc,
-            "stats": f"高考力:{self.profile.gaokao_score} | 竞赛力:{self.profile.comp_score} | 理智:{self.profile.sanity} | 老师好感:{self.profile.reputation}"
+            "stats": f"高考力:{int(self.profile.gaokao_score)} | 竞赛力:{self.profile.comp_score} | 宿敌({rival.name}:{int(rival.score)})"
         }
         self.history_log.append(log_entry)
         
-        # 8. 推进时间
         self.week += 1
         if self.week > self.max_weeks:
             self._end_semester()
@@ -99,13 +104,11 @@ class DualFSM:
         self.week = 1
         if self.semester == 1:
             self.semester = 2
-            self.history_log.append({"date": "寒假", "state": "HOLIDAY", "event": "寒假闭关，在被窝里偷偷刷题。", "stats": "-"})
+            self.history_log.append({"date": "寒假", "state": "HOLIDAY", "event": "寒假：被父母送去‘衡水宗’分舵闭关，每日挥剑一万次（做卷子）。", "stats": "-"})
         else:
             self.semester = 1
             self.year += 1
-            self.history_log.append({"date": "暑假", "state": "HOLIDAY", "event": "暑假特训营，前往省城受虐。", "stats": "-"})
-
-    # --- Event Checkers ---
+            self.history_log.append({"date": "暑假", "state": "HOLIDAY", "event": "暑假：参加竞赛集训营，与来自全国的天才切磋。", "stats": "-"})
 
     def _check_main_events(self):
         if self.week == 10: return "期中大劫"
@@ -115,74 +118,71 @@ class DualFSM:
         return None
 
     def _check_comp_events(self):
-        # 设定每年的赛季节奏
         if self.semester == 1:
-            if self.week == 12: return "NOIP初赛(海选)"
-            if self.week == 18: return "NOIP复赛(分赛区)"
+            if self.week == 12: return "NOIP初赛"
+            if self.week == 18: return "NOIP复赛"
         if self.semester == 2:
             if self.week == 8: return "省选(省队战)"
-            if self.week == 15 and self.profile.comp_rank >= 1: return "NOI国决(决赛)"
-        
-        # 随机集训
-        if random.random() < 0.15: return "机房集训"
+            if self.week == 15 and self.profile.comp_rank >= 1: return "NOI国决"
+        if random.random() < 0.2: return "机房集训"
         return None
 
-    # --- Handlers ---
-
     def _resolve_conflict(self, main, sub):
-        # 经典剧情：为了竞赛放弃月考，被老师骂
-        self.profile.reputation -= 20
-        self.profile.gaokao_score -= 10
-        self.profile.comp_score += 50
-        return f"【冲突爆发】{main}与{sub}撞车！主角毅然选择了‘寒克武’，逃掉晚自习去机房参赛。教导主任暴怒，在窗外死亡凝视。"
+        choices = [
+            f"放弃{main}，潜入机房备战{sub}。林清北嘲笑主角是逃兵。",
+            f"一边应付{main}，一边在草稿纸上推导{sub}的算法。双线操作，神魂枯竭。",
+            f"在{main}的考场上，把作文写成了代码，震惊阅卷长老。"
+        ]
+        return f"【道心抉择】{random.choice(choices)}"
 
     def _handle_main(self, event):
-        if "考" in event:
-            outcome = "发挥稳定"
-            if self.profile.sanity < 50:
-                outcome = "心态炸裂，发挥失常"
-                self.profile.gaokao_score -= 20
-            else:
-                self.profile.gaokao_score += 10
-            return f"【正道试炼】{event}降临。主角{outcome}。全校排名波动。"
-        return "ERROR"
+        rival = self.npcs[0]
+        diff = self.profile.gaokao_score - rival.score
+        
+        # 动态描述生成
+        scenes = [
+            "监考老师祭出‘信号屏蔽仪’，全场灵气被封印。",
+            "压轴导数题化作一条恶龙，盘踞在卷面上。",
+            "听力广播里传来了魔音贯耳的英语听力，试图扰乱道心。",
+            "隔壁班学霸开启了‘抖腿光环’，引发地震波攻击。"
+        ]
+        
+        if diff > 30: 
+            res = "主角笔走龙蛇，提前交卷，留下一个孤傲的背影。"
+        elif diff > -50:
+            res = f"主角与{rival.name}在分数线上反复拉锯，最终险胜/惜败。"
+        else:
+            res = f"主角被题目镇压，道心破碎，看着{rival.name}绝尘而去。"
+            
+        growth = random.randint(15, 25) # 加快成长速度
+        self.profile.gaokao_score += growth
+        
+        return f"【{event}】{random.choice(scenes)} {res}"
 
     def _handle_sub(self, event):
         skill = CompSkills.get_skill(self.profile.comp_sect)
         if "赛" in event:
-            # 比赛逻辑
-            success_prob = 0.1 + (self.profile.comp_score / 1000)
-            if random.random() < success_prob:
+            if random.random() < 0.7: 
                 self.profile.comp_rank += 1
-                self.profile.reputation += 30 # 拿到奖老师就高兴了
-                return f"【旁门左道】{event}。主角祭出绝学‘{skill}’，AC了压轴题，成功晋级！全校通报表扬！"
+                return f"【魔教扬威】{event}。主角使用‘{skill}’暴力破解了第三题。获得金牌！全校通报。"
             else:
-                self.profile.sanity -= 20
-                self.profile.reputation -= 10
-                return f"【旁门左道】{event}。主角在‘{skill}’上失误（爆零），惨遭淘汰。被正道老师嘲讽：‘早说了搞竞赛没前途’。"
+                return f"【魔教折戟】{event}。评测机显示‘Runtime Error’。主角掩面而泣，苏小狸递来一张纸巾。"
         else:
-            # 训练逻辑
-            self.profile.comp_score += 20
-            self.profile.gaokao_score -= 5 # 偏科
-            return f"【魔教潜修】{event}。主角在机房通宵刷题，领悟了‘{skill}’。文化课作业没写完，被罚站。"
+            daily = [
+                f"机房空调坏了，服务器散热的声音如雷鸣。",
+                f"因为在机房吃泡面，被教导主任抓住。",
+                f"为了调试一个Bug，主角三天没洗头。"
+            ]
+            return f"【旁门潜修】{random.choice(daily)} 领悟了‘{skill}’。"
 
     def _daily_grind(self):
-        # 只有在非特殊事件时，根据理智决定策略
-        if self.is_comp_active():
-            # 偷偷搞竞赛
-            self.profile.comp_score += 5
-            self.profile.energy -= 40
-            return "日常：表面复习文化课，书底下压着一本《算法导论》。"
-        else:
-            self.profile.gaokao_score += 5
-            return "日常：枯燥的刷题岁月。五三，王后雄，天利38套。"
-
-    def _update_stats(self):
-        # 自然恢复与消耗
-        if self.profile.reputation < 20:
-            self.state = GameState.SLUMP
-            self.profile.sanity -= 5
-        
-        # 随着年级升高，难度增加
-        self.profile.sanity += 5 # 周末回血
-        if self.profile.sanity > 100: self.profile.sanity = 100
+        events = [
+            "晚自习停电，全班点蜡烛夜战。",
+            f"食堂抢饭，利用‘图论’规划最短路径。",
+            f"体育课被占，数学老师笑眯眯地走了进来。",
+            "发现一本《五三》残卷，如获至宝。",
+            "被没收了手机，只能在脑海中运行代码。",
+            "同桌的笔掉在地上，主角帮忙捡起，引发蝴蝶效应。"
+        ]
+        self.profile.gaokao_score += 8
+        return f"【日常】{random.choice(events)}"
