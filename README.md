@@ -10,21 +10,20 @@
 
 欲练此功，必先筑基：
 
-1. **凝练灵气**：确保已安装 `Python 3.8+`。
+1. **凝练灵气**：确保已安装 `Python 3.8+` 及 `uv`。
 2. **开启洞府**：
    ```bash
-   setup_env.bat
+   uv sync
    ```
-   (Linux 道友请手动 `python -m venv venv && source venv/bin/activate`)
 
 ## 🎮 运转周天 (Usage)
 
-1. **配置阵眼**：修改 `config.json`，注入你的 `API_KEY`（灵石）。
+1. **配置阵眼**：在 `.env` 中注入你的 `API_KEY`（灵石）。
 2. **启动大阵**：
    ```bash
-   python main_v5_pro.py
+   uv run main.py
    ```
-3. **挂机飞升**：脚本会自动处理断网、报错、走火入魔等异常，直到写满 100 万字。
+3. **挂机飞升**：脚本会自动处理断网、报错、走火入魔等异常，直到写满 200 万字。
 
 ## 🧩 阵法架构 (Architecture)
 

@@ -1,0 +1,22 @@
+[project]
+name = "acg--auto-chronicle-gaokao"
+version = "0.1.0"
+description = "天道自动写作大阵 - 全自动爽文生成引擎"
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "openai>=1.0.0",
+    "colorama>=0.4.6",
+    "requests>=2.31.0",
+    "python-dotenv>=1.0.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["novel_engine*"]
+
+[tool.uv]
+package = true

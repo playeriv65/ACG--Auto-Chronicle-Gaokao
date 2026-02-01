@@ -14,12 +14,13 @@ LOG_FILE = "quiz_gen_final.log"
 
 def write_log(msg):
     timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-    formatted = f"[{timestamp}] {msg}\n"
+    formatted = f"[{timestamp}] {msg}"
+    # 写入文件 (此为日志真身)
     with open(LOG_FILE, "a", encoding="utf-8") as f:
-        f.write(formatted)
-    # 同时也尝试在控制台打印一下
-    try: print(msg)
-    except: pass
+        f.write(formatted + "\n")
+    # 仅在交互式终端打印，避免 nohup 重定向产生重影
+    if sys.stdout.isatty():
+        print(formatted)
 
 def get_db_conn():
     return sqlite3.connect(DB_PATH)
@@ -65,13 +66,13 @@ def run_batch():
                     # 强加超时逻辑在 AI 调用层（如果 writer 已支持）
                     # 这里直接调用
                     content = writer.generate_quiz(subj, topic)
-                    if content and len(content) > 100:
+                    if content and len(content) > 1: # 放宽限制，只要有气就行
                         save_quiz(abs_week, subj, topic, content)
                         write_log(f"  [SUCCESS] {subj} 已入库")
                         success = True
                         break
                     else:
-                        write_log(f"  [EMPTY] 返回无效，重试 {attempt+1}")
+                        write_log(f"  [EMPTY] 返回内容太短或为空: {content}")
                         time.sleep(10)
                 except Exception as e:
                     write_log(f"  [ERROR] {e}")

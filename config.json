@@ -1,7 +1,7 @@
 {
     "api": {
-        "base_url": "https://integrate.api.nvidia.com/v1",
-        "api_key": "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",
+        "base_url": "${BASE_URL}",
+        "api_key": "${API_KEY}",
         "model": "z-ai/glm4.7",
         "max_tokens": 16384,
         "temperature": 1.0,
