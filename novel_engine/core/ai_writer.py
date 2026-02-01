@@ -21,7 +21,7 @@ class AIWriter:
         self.summary_file, self.last_chapter_content = "plot_summary.txt", ""
         self.messages = []
 
-    def _call_api(self, messages, max_tokens=16384, stream_to_stdout=False):
+    def _call_api(self, messages, max_tokens=16384):
         """核心：归元斩思模式，带指数退避重试机制"""
         max_retries = 3
         for attempt in range(max_retries):
@@ -32,34 +32,15 @@ class AIWriter:
                 # 强化封条：按照官方标准语法显式禁止推演
                 extra_body={"chat_template_kwargs":{"enable_thinking":False,"clear_thinking":True}}
                 
-                if stream_to_stdout:
-                    completion = self.client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        temperature=0.3,
-                        max_tokens=max_tokens,
-                        extra_body=extra_body,
-                        stream=True
-                    )
-                    full_response = ""
-                    for chunk in completion:
-                        if not chunk.choices: continue
-                        content = getattr(chunk.choices[0].delta, "content", None)
-                        if content:
-                            sys.stdout.write(content)
-                            sys.stdout.flush()
-                            full_response += content
-                    print()
-                else:
-                    completion = self.client.chat.completions.create(
-                        model=self.model,
-                        messages=messages,
-                        temperature=0.3,
-                        max_tokens=max_tokens,
-                        extra_body=extra_body,
-                        stream=False
-                    )
-                    full_response = completion.choices[0].message.content
+                completion = self.client.chat.completions.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=0.3,
+                    max_tokens=max_tokens,
+                    extra_body=extra_body,
+                    stream=False
+                )
+                full_response = completion.choices[0].message.content
 
                 if not full_response:
                     raise ValueError("Empty response from API")
@@ -83,8 +64,7 @@ class AIWriter:
             {"role": "system", "content": "你是一名精准的命题机器。"},
             {"role": "user", "content": prompt}
         ]
-        # 回归正途，默认不再流式输出给终端
-        return self._call_api(messages, max_tokens=500, stream_to_stdout=False)
+        return self._call_api(messages, max_tokens=500)
 
     def generate_scene(self, prompt, stats_context, min_length=4000):
         # ... (逻辑同前，但内部调用 _call_api_stream) ...

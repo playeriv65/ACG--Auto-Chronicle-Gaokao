@@ -9,7 +9,7 @@ from novel_engine.data.curriculum_data import Curriculum
 from novel_engine.core.ai_writer import writer
 from novel_engine.data.database import Subject
 
-DB_PATH = "novel_engine/data/quiz_bank.db"
+DB_PATH = "novel_engine/data/storage/course_data.db"
 LOG_FILE = "quiz_gen_final.log"
 
 def write_log(msg):
@@ -24,6 +24,22 @@ def write_log(msg):
 
 def get_db_conn():
     return sqlite3.connect(DB_PATH)
+
+def init_db():
+    conn = get_db_conn()
+    cursor = conn.cursor()
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS quiz (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        week INTEGER,
+        subject TEXT,
+        topic TEXT,
+        content TEXT,
+        UNIQUE(week, subject, topic)
+    )
+    """)
+    conn.commit()
+    conn.close()
 
 def check_exists(week, subject, topic):
     conn = get_db_conn()
@@ -41,6 +57,7 @@ def save_quiz(week, subject, topic, content):
     conn.close()
 
 def run_batch():
+    init_db()
     write_log("🚀 [天库大阵] 开始执行持久化命题任务...")
     
     target_subjects = [Subject.MATH, Subject.PHYS, Subject.CHEM, Subject.BIO, Subject.ENG, Subject.CHN]

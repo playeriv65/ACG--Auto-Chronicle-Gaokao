@@ -112,11 +112,17 @@ class BeingEngine:
         used = {"叶凌天", "顾辞远"}
         for i in range(28):
             is_male = random.random() < 0.5; gender = "男" if is_male else "女"
-            name = random.choice(NPCData.SURNAMES) + random.choice(NPCData.STUDENT_NAMES_MALE if is_male else NPCData.STUDENT_NAMES_FEMALE)
-            while name in used: name = random.choice(NPCData.SURNAMES) + random.choice(NPCData.STUDENT_NAMES_MALE if is_male else NPCData.STUDENT_NAMES_FEMALE)
+            # 使用新接口生成 00后 学生名字
+            name = NPCData.get_name("M" if is_male else "F", "00s")
+            while name in used: 
+                name = NPCData.get_name("M" if is_male else "F", "00s")
             used.add(name); self.students.append(Person(name, "同学", [random.choice(NPCData.ARCHETYPES)[0]], gender=gender))
         for subj, desc in NPCData.TEACHER_PROFILES:
-            name = random.choice(NPCData.SURNAMES) + random.choice(NPCData.TEACHER_NAMES_MALE); self.teachers.append(Person(name + "老师", "老师", [subj]))
+            # 使用新接口生成 70后 老师名字
+            # 简单假设老师性别根据科目随机，或者这里可以随机
+            is_male_teacher = random.random() < 0.5
+            name = NPCData.get_name("M" if is_male_teacher else "F", "70s")
+            self.teachers.append(Person(name + "老师", "老师", [subj]))
 
     def tick(self, week_idx):
         abs_week = (self.year - 1) * 40 + (self.semester - 1) * 20 + week_idx
@@ -135,6 +141,11 @@ class BeingEngine:
             battle_type = f"【周考·{'/'.join([str(s) for s in battle_subjects])}】"
 
         if abs_week == 11 and self.year == 1: self.protagonist.tags.append("信奥党"); logs.append("开启信奥。")
+
+        # 冲突判定 (道心抉择)
+        if "信奥党" in self.protagonist.tags and random.random() < 0.15:
+            conflict_log = self._resolve_conflict(battle_type, "信奥集训")
+            logs.append(conflict_log)
 
         for s in self.students: s.plan_week(is_exam_week, abs_week, battle_subjects); s.execute_week()
             
@@ -158,7 +169,10 @@ class BeingEngine:
             mc_score = sum([mc.get_exam_score(s) for s in battle_subjects])
             rival_score = sum([self.students[0].get_exam_score(s) for s in battle_subjects])
         
-        logs.append(f"【战报】主角战力:{mc_score} vs 榜首:{rival_score}")
+        # 战斗描述生成 (考场厮杀)
+        battle_log = self._battle_narrative(mc, self.rankings[0], battle_type, mc_score, rival_score)
+        logs.append(battle_log)
+
         for s in self.students: s.last_week_rank = self.students.index(s) + 1
         
         quiz_data = None
@@ -166,6 +180,33 @@ class BeingEngine:
             quiz_data = QuizDatabase.get_quiz(battle_subjects[0], curriculum.get(battle_subjects[0], "复习") if curriculum else "复习")
             
         return logs, battle_type, quiz_data
+
+    def _resolve_conflict(self, main, sub):
+        choices = [
+            f"放弃{main}复习，潜入机房备战{sub}。林清北嘲笑主角是逃兵。",
+            f"一边应付{main}，一边在草稿纸上推导{sub}算法。双线操作，神魂枯竭。",
+            f"在{main}的考场上，把作文写成了代码，震惊阅卷长老。"
+        ]
+        return f"【道心抉择】{random.choice(choices)}"
+    
+    def _battle_narrative(self, mc, rival, event, mc_score, rival_score):
+        diff = mc_score - rival_score
+        scenes = [
+            "监考老师祭出‘信号屏蔽仪’，全场灵气被封印。",
+            "压轴导数题化作一条恶龙，盘踞在卷面上。",
+            "听力广播里传来了魔音贯耳的英语听力，试图扰乱道心。",
+            "隔壁班学霸开启了‘抖腿光环’，引发地震波攻击。",
+            f"{rival.name}眼神冰冷，随手丢出一招‘洛必达法则’。"
+        ]
+        
+        if diff > 10: 
+            res = f"{mc.name}使用了‘{(mc.skills[-1][0] if mc.skills else '基础解题法')}’，提前交卷，留下一个孤傲的背影。"
+        elif diff > -20:
+            res = f"{mc.name}与{rival.name}在分数线上反复拉锯，最终险胜/惜败。"
+        else:
+            res = f"{mc.name}被压轴题镇压，道心破碎，看着{rival.name}绝尘而去。"
+            
+        return f"【战报】{random.choice(scenes)} {res} (我方战力:{mc_score} vs 榜首:{rival_score})"
 
     def calculate_rankings(self):
         def total_score(s): return sum([s.get_exam_score(sub) for sub in [Subject.MATH, Subject.PHYS, Subject.CHEM, Subject.BIO, Subject.ENG, Subject.CHN]])

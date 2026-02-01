@@ -4,13 +4,37 @@ import json
 import time
 sys.path.append(os.getcwd())
 
+import sqlite3
 from novel_engine.core.being_engine import BeingEngine
 from novel_engine.core.ai_writer import writer
 
 PLAN_FILE = "3_year_master_plan.txt"
+QUIZ_DB = "novel_engine/data/storage/course_data.db"
+
+def get_cached_quiz(week, subject, topic):
+    if not os.path.exists(QUIZ_DB): return None
+    try:
+        conn = sqlite3.connect(QUIZ_DB)
+        cursor = conn.cursor()
+        cursor.execute("SELECT content FROM quiz WHERE week=? AND subject=? AND topic=?", (week, subject, topic))
+        row = cursor.fetchone()
+        conn.close()
+        return row[0] if row else None
+    except: return None
+
+def save_to_cache(week, subject, topic, content):
+    try:
+        conn = sqlite3.connect(QUIZ_DB)
+        cursor = conn.cursor()
+        cursor.execute("CREATE TABLE IF NOT EXISTS quiz (id INTEGER PRIMARY KEY AUTOINCREMENT, week INTEGER, subject TEXT, topic TEXT, content TEXT, UNIQUE(week, subject, topic))")
+        cursor.execute("INSERT OR REPLACE INTO quiz (week, subject, topic, content) VALUES (?, ?, ?, ?)", (week, subject, topic, content))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f" [DB Error] {e}")
 
 def run_plan():
-    print("正在开启‘造化鼎’，推演拮抗中学三年因果...")
+    print("正在开启‘造化鼎’（缓存增强版），推演拮抗中学三年因果...")
     engine = BeingEngine()
     engine.init_world()
     
@@ -27,7 +51,7 @@ def run_plan():
 
         # 2. 推演 120 周
         f.write("【第二卷：三年征途】\n")
-        for year in [1]:
+        for year in [1, 2, 3]:
             engine.year = year
             for semester in [1, 2]:
                 engine.semester = semester
@@ -37,13 +61,24 @@ def run_plan():
                 for week in range(1, 21):
                     # 推演一周数值
                     logs, battle_type, quiz_raw = engine.tick(week)
+                    abs_week = (year - 1) * 40 + (semester - 1) * 20 + week
                     
                     # 实时命题 (如果是周考)
                     quiz_final = quiz_raw
                     if quiz_raw and isinstance(quiz_raw, dict) and quiz_raw.get("type") == "AI_GENERATED":
-                        # 这里调用 GLM-4.7 命制魔王级题目
-                        print(f"    [Week {week:02d}] 正在请‘判官’命题: {quiz_raw['topic']}...")
-                        quiz_final = writer.generate_quiz(quiz_raw['subject'], quiz_raw['topic'])
+                        subject = quiz_raw['subject']
+                        topic = quiz_raw['topic']
+                        
+                        # 1. 查缓存
+                        cached = get_cached_quiz(abs_week, subject, topic)
+                        if cached:
+                            quiz_final = cached
+                        else:
+                            # 2. 调 AI
+                            print(f"    [Week {week:02d}] 正在请‘判官’命题: {topic}...")
+                            quiz_final = writer.generate_quiz(subject, topic)
+                            # 3. 存缓存
+                            if quiz_final: save_to_cache(abs_week, subject, topic, quiz_final)
                     
                     # 记录剧本
                     date_str = f"G{year}S{semester}_W{week:02d}"

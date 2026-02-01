@@ -1,76 +1,113 @@
+import sqlite3
 import random
+import os
+
+DB_PATH = "novel_engine/data/storage/world_data.db"
 
 class Subject:
     MATH, PHYS, CHEM, BIO, ENG, CHN, INFO, HIST, GEO, POLI = "数学", "物理", "化学", "生物", "英语", "语文", "信奥", "历史", "地理", "政治"
     ALL = [MATH, PHYS, CHEM, BIO, ENG, CHN, INFO, HIST, GEO, POLI]
 
-class SkillTree:
-    MATH = [("集合的概念与表示", 1, "展开‘全集领域’..."), ("函数的概念与性质", 2, "解析敌人漏洞..."), ("指数与对数函数", 3, "战力瞬间翻倍..."), ("三角恒等变换", 4, "诱导公式迷宫..."), ("平面向量", 5, "线性打击..."), ("数列与数学归纳法", 6, "等比数列陷阱..."), ("立体几何", 7, "降维打击..."), ("解析几何", 8, "离心率锁定..."), ("导数及其应用", 9, "切线风暴..."), ("概率与统计", 10, "大数定律锁定...")]
-    PHYSICS = [("运动的描述", 1, "参考系预判..."), ("牛顿运动定律", 2, "反伤甲..."), ("圆周运动", 3, "向心力牵引..."), ("万有引力与航天", 4, "第一宇宙速度..."), ("机械能守恒", 5, "势能转动能..."), ("动量守恒", 6, "碰撞冲击..."), ("静电场", 7, "库仑力场..."), ("磁场与洛伦兹力", 8, "回旋加速器..."), ("电磁感应", 9, "楞次定律..."), ("波粒二象性", 10, "薛定谔的猫...")]
-    CHEM = [("物质的量", 1, "摩尔诅咒..."), ("氧化还原反应", 2, "强氧化剂..."), ("元素周期律", 3, "位构性统一..."), ("化学反应速率", 4, "催化剂爆发..."), ("化学平衡", 5, "勒夏特列原理..."), ("电解质溶液", 6, "盐类水解..."), ("有机烃类", 7, "苯环结界..."), ("烃的衍生物", 8, "银镜反应..."), ("合成高分子", 9, "聚合反应..."), ("物质结构与性质", 10, "杂化轨道...")]
-    BIO = [("细胞的结构", 1, "细胞膜过滤..."), ("细胞呼吸", 2, "线粒体过载..."), ("光合作用", 3, "灵感制造..."), ("有丝分裂", 4, "分身答题..."), ("遗传规律", 5, "孟德尔神算..."), ("基因的表达", 6, "中心法则..."), ("变异与进化", 7, "抗题性进化..."), ("内环境稳态", 8, "激素调节..."), ("神经调节", 9, "反射弧归零..."), ("生态系统", 10, "食物链顶端...")]
-    INFO = [("C++语言基础", 1, "编译永不报错..."), ("基础算法", 2, "二分查找..."), ("数据结构", 3, "单调队列..."), ("搜索", 4, "剪枝神术..."), ("动态规划", 5, "状态转移..."), ("图论", 6, "Dijkstra寻路..."), ("树形结构", 7, "Lazy标记..."), ("数论", 8, "扩展欧几里得..."), ("字符串", 9, "AC自动机..."), ("计算几何", 10, "最大流最小割...")]
-    CHN = [("现代文阅读", 2, "共情能力..."), ("文言文实词", 4, "通假字识破..."), ("古诗词默写", 6, "意象具象化..."), ("作文立意", 8, "凤头猪肚豹尾...")]
-    ENG = [("3500词汇", 2, "词根分析眼..."), ("语法从句", 4, "从句套娃..."), ("完形填空", 6, "语感预判..."), ("书面表达", 8, "衡水体书法...")]
+class DBConnector:
+    @staticmethod
+    def get_connection():
+        return sqlite3.connect(DB_PATH)
 
+class SkillTree:
     @staticmethod
     def get_skill_by_subject(subject, mastery_val):
-        attr_map = {Subject.MATH: "MATH", Subject.PHYS: "PHYSICS", Subject.CHEM: "CHEM", Subject.BIO: "BIO", Subject.INFO: "INFO", Subject.CHN: "CHN", Subject.ENG: "ENG"}
-        skills = getattr(SkillTree, attr_map.get(subject, "MATH"), [])
+        conn = DBConnector.get_connection()
+        cursor = conn.cursor()
+        
+        # Map subject names if necessary, or ensure DB matches
+        # The DB was seeded with full Chinese names, so we can query directly
+        query_subject = subject
+        
+        cursor.execute("SELECT name, level, description FROM skills WHERE subject = ? ORDER BY level", (query_subject,))
+        skills = cursor.fetchall()
+        conn.close()
+        
+        if not skills:
+            return ("基础知识", 1, "平平无奇")
+            
+        # Mock logic: mastery 1000 = level 1, 2000 = level 2...
         idx = min(len(skills)-1, max(0, int(mastery_val // 1000) - 1))
+        # Randomly choose a skill up to the current unlocked level
+        # To make it more interesting, we can weight it towards higher level skills
         unlocked = skills[:idx+1]
-        return random.choice(unlocked) if unlocked else ("基础知识", 1, "平平无奇")
+        
+        if not unlocked: return ("基础知识", 1, "平平无奇")
+        
+        choice = random.choice(unlocked)
+        return choice # (name, level, desc)
 
 class EventLibrary:
-    EVENTS = [
-        ("ANY", "宿舍夜聊聊到了未来，大家都沉默了。", "mood-5"), ("ANY", "舍友打呼噜像电钻，你盯着天花板到天亮。", "fatigue+20, stress+10"),
-        ("ANY", "偷偷在宿舍煮火锅，香味引来了宿管阿姨。", "stress+20"), ("ANY", "发现晾在阳台的内裤被风吹到了楼下树上。", "mood-10"),
-        ("ANY", "全宿舍合资买了个二手小冰箱，快乐似神仙。", "mood+10"), ("ANY", "因为谁去倒垃圾的问题，和室友爆发冷战。", "mood-10"),
-        ("ANY", "半夜有人说梦话，大喊‘这题选C！’。", "mood+5"), ("WINTER", "宿舍暖气坏了，大家裹着棉被瑟瑟发抖。", "fatigue+10"),
-        ("SUMMER", "宿舍不仅没空调连风扇都坏了，热成狗。", "fatigue+15"), ("ANY", "隔壁宿舍传来吉他声，唱着跑调的《成都》。", "mood+5"),
-        ("ANY", "在床板下发现了上一届学长留下的刻字：‘快逃！’。", "stress+5"), ("ANY", "熄灯后偷偷玩手机，屏幕光亮瞎了眼。", "fatigue+10"),
-        ("ANY", "早上起床抢厕所，上演生死时速。", "stress+5"), ("ANY", "周末赖床直到下午两点，早饭午饭一起吃。", "fatigue-20"),
-        ("ANY", "突击检查违禁电器，你的热得快藏在了鞋盒里。", "stress+15"), ("ANY", "食堂推出新品‘辣椒炒月饼’，勇士们跃跃欲试。", "mood+5"),
-        ("ANY", "在免费汤里捞出了一整只完整的鸡头，吓尿。", "stress+10"), ("ANY", "排了半天队，轮到你时阿姨刚好把红烧肉抖没了。", "mood-20"),
-        ("ANY", "食堂电视正在放NBA总决赛，男生们围得水泄不通。", "mood+10"), ("ANY", "米饭里吃出了一颗钢丝球，阿姨赔了你个鸡腿。", "mood+5"),
-        ("ANY", "因为插队问题，高三学长和高一新生打起来了。", "stress+5"), ("ANY", "食堂涨价了，肉包子从1块涨到了1块5。", "mood-5"),
-        ("ANY", "发现食堂角落坐着校花，这顿饭吃得格外香。", "mood+10"), ("ANY", "带了老干妈去食堂，成为了全桌的救世主。", "reputation+5"),
-        ("ANY", "暴饮暴食庆祝考试结束，结果拉肚子。", "fatigue+10"), ("ANY", "粉笔头精准命中了你的额头，全班哄堂大笑。", "reputation-5"),
-        ("ANY", "晚自习停电！全班欢呼3秒后被班主任镇压。", "mood+5"), ("ANY", "后座的同学一直抖腿，连带着你的桌子都在共振。", "stress+10"),
-        ("ANY", "黑板还没擦干就写字，反光完全看不清。", "stress+5"), ("ANY", "体育课被数学老师占了，理由是体育老师‘落枕’。", "mood-20, math+5"),
-        ("ANY", "英语听力全是杂音，像是在听外星语。", "stress+10"), ("ANY", "同桌借你的笔记去复印，结果把你夹在里面的情书弄丢了。", "mood-30"),
-        ("ANY", "被老师点名回答问题，全班死寂，你尴尬站立。", "stress+10"), ("ANY", "换了座位，新同桌是个超级学霸，压力山大。", "stress+15, all_mastery+10"),
-        ("ANY", "换了座位，新同桌是个话痨，你的学习效率直线下降。", "all_mastery-10"), ("ANY", "在课桌抽屉深处摸到一块干硬的口香糖。", "mood-5"),
-        ("ANY", "做课间操时转体运动，看到暗恋的人也在看你。", "mood+20"), ("ANY", "眼保健操时间，大家都在偷偷睁眼比谁的白眼翻得大。", "mood+5"),
-        ("ANY", "班主任站在后门窗户口，死亡凝视长达5分钟。", "stress+30"), ("ANY", "发下来的试卷印反了，做题节奏大乱。", "stress+10"),
-        ("ANY", "自动铅笔芯断在了一道几何题的辅助线上，弄脏了卷面。", "stress+5"), ("ANY", "为了解一道压轴题，不知不觉用完了一整本草稿纸。", "all_mastery+20"),
-        ("ANY", "早读声音太小，被罚站到走廊去读。", "reputation-5"), ("ANY", "历史老师讲野史讲得太精彩，全班没人想下课。", "mood+10"),
-        ("ANY", "物理实验课，把电路接短路了，冒出一股黑烟。", "reputation+5"), ("ANY", "化学实验课，不小心把试管摔碎了，赔了5块钱。", "mood-5"),
-        ("HIGH_STRESS", "看着窗外的飞鸟，突然很想变成一只鸟飞走。", "mood-10"), ("HIGH_STRESS", "因为一道题算不出来，趴在桌子上无声地哭了。", "stress-10"),
-        ("LOW_SCORE", "被叫去办公室喝茶，班主任进行了长达1小时的心理按摩。", "stress+20"), ("LOW_SCORE", "父母承诺考进前十名就奖励最新款手机。", "stress+10"),
-        ("ANY", "收到了匿名的小纸条，上面写着‘加油’。", "mood+20"), ("ANY", "目睹了楼道里的情侣吵架，觉得单身真好。", "mood+5"),
-        ("ANY", "好朋友突然不理你了，你完全不知道做错了什么。", "stress+10"), ("ANY", "帮别人递情书被老师截获，成了背锅侠。", "reputation-10"),
-        ("ANY", "全班起哄撮合某两个人，当事人满脸通红。", "mood+5"), ("ANY", "在操场散步，听到有人在背单词，顿时感到内卷的恐怖。", "stress+5"),
-        ("ANY", "愚人节，班长骗大家说今天放假，差点被打死。", "mood+10"), ("ANY", "元旦晚会，平时沉默寡言的同学上去跳了段街舞，炸场。", "mood+10"),
-        ("ANY", "运动会，班级接力赛掉棒了，大家都很沮丧。", "mood-10"), ("ANY", "运动会，本来没希望的项目拿了第一，全班沸腾。", "mood+20"),
-        ("ANY", "隔壁班女生来借书，全班男生行注目礼。", "mood+5"), ("ANY", "有人在厕所抽烟被抓，全校通报批评。", "stress+5"),
-        ("HIGH_RELATION", "生病请假，同桌帮你记了满满几页的笔记。", "mood+30"), ("HIGH_RELATION", "周末约了同学去书店，结果最后变成了去网吧。", "fatigue+10"),
-        ("ANY", "毕业班在喊楼，漫天飞舞的试卷像雪花一样。", "stress+10"), ("WINTER", "第一场雪，大家疯了一样冲出教室打雪仗。", "mood+20"),
-        ("WINTER", "流感肆虐，班里空了一半座位，你也觉得喉咙痛。", "fatigue+15"), ("WINTER", "手冻僵了，写字像鸡爪，完全不在状态。", "all_mastery-5"),
-        ("SUMMER", "知了叫得人心烦意乱，完全看不进书。", "stress+5"), ("SUMMER", "教室里弥漫着汗味和风油精混合的味道。", "stress+5"),
-        ("SUMMER", "一场暴雨，操场变成了‘拮抗海’，大家都在看海。", "mood+10"), ("SUMMER", "蚊子在耳边嗡嗡作响，打死一只带血的。", "mood-2"),
-        ("ANY", "高考倒计时牌变成了两位数，气氛骤然紧张。", "stress+20"), ("ANY", "体检，大家都在比谁的身高又长了。", "mood+5"),
-        ("ANY", "拍证件照，摄影师把你拍成了通缉犯。", "mood-5"), ("ANY", "学校修路，挖掘机一整天都在‘突突突’。", "stress+10"),
-        ("ANY", "小卖部倒闭了，全校陷入恐慌。", "mood-10"), ("ANY", "由于台风过境，学校宣布停课半天！", "mood+50"),
-        ("ANY", "消防演习，大家慢悠悠地散步到操场。", "fatigue-5"), ("ANY", "全校停水，厕所的味道令人窒息。", "stress+10")
-    ]
+    @staticmethod
+    def get_random_event(season="ANY"):
+        conn = DBConnector.get_connection()
+        cursor = conn.cursor()
+        
+        # Get ANY + Current Season
+        cursor.execute("SELECT description, effect FROM events WHERE season = 'ANY' OR season = ?", (season,))
+        events = cursor.fetchall()
+        conn.close()
+        
+        if not events:
+            return ("发呆", "")
+            
+        return random.choice(events) # (desc, effect)
+    
+    # For compatibility if the engine accesses EVENTS list directly (it shouldn't, but let's check BeingEngine usage)
+    # Looking at BeingEngine: self.event_pool = EventLibrary.EVENTS -> It accesses list directly.
+    # So we need to provide a property or change BeingEngine. 
+    # Let's add a property that fetches all events to maintain compatibility for now, 
+    # but ideally BeingEngine should call get_random_event.
+    # Actually, BeingEngine logic is:
+    # candidates = [(d,e) for t,d,e in self.event_pool if (week - self.global_cooldowns.get(d,-99) >= 20) and (t in ["ANY", season])]
+    # So it expects a list of (type, desc, effect).
+    
+    @property
+    def EVENTS(self):
+        conn = DBConnector.get_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT season, description, effect FROM events")
+        events = cursor.fetchall() # List of (season, desc, effect)
+        conn.close()
+        return events
+
+# Instantiate singleton for compatibility
+EventLibrary = EventLibrary()
 
 class NPCData:
-    SURNAMES = ["李", "王", "张", "刘", "陈", "杨", "赵", "黄", "周", "吴", "徐", "孙", "胡", "朱", "高", "林", "何", "郭", "马", "罗"]
-    STUDENT_NAMES_MALE = ["浩宇", "宇轩", "浩然", "子轩", "皓轩", "宇航", "梓豪", "子豪", "亦辰", "奕辰"]
-    STUDENT_NAMES_FEMALE = ["欣怡", "梓涵", "诗涵", "梓宣", "子涵", "紫涵", "佳怡", "雨涵", "雨欣", "一诺"]
-    TEACHER_NAMES_MALE = ["建国", "建军", "志强", "志刚", "志伟"]
-    TEACHER_NAMES_FEMALE = ["秀英", "玉兰", "丽华", "艳华", "敏华"]
+    # These are now dynamic
+    
+    @staticmethod
+    def get_name(gender="M", era="00s"):
+        conn = DBConnector.get_connection()
+        cursor = conn.cursor()
+        
+        # 1. Get a Surname
+        # Weighted random based on frequency? For now just random from list
+        cursor.execute("SELECT name FROM surnames ORDER BY RANDOM() LIMIT 1")
+        res = cursor.fetchone()
+        surname = res[0] if res else "李"
+        
+        # 2. Get a Given Name
+        # Try to match era and gender
+        cursor.execute("SELECT name FROM given_names WHERE gender = ? AND era = ? ORDER BY RANDOM() LIMIT 1", (gender, era))
+        res = cursor.fetchone()
+        
+        if not res:
+            # Fallback to any name of that gender
+            cursor.execute("SELECT name FROM given_names WHERE gender = ? ORDER BY RANDOM() LIMIT 1", (gender,))
+            res = cursor.fetchone()
+            
+        given_name = res[0] if res else ("强" if gender=="M" else "珍")
+        
+        conn.close()
+        return surname + given_name
+
+    # Static data that doesn't need DB yet (Archetypes, Teacher Profiles)
     ARCHETYPES = [("卷王", "肝帝", {"stress": 80}), ("天赋怪", "妖孽", {"stress": 10}), ("恋爱脑", "情种", {"mood": 90}), ("透明人", "凡人", {"stress": 40}), ("刺头", "叛逆", {"reputation": 20})]
     TEACHER_PROFILES = [("数学", "口头禅：送分题"), ("英语", "口头禅：最差一届"), ("语文", "口头禅：作者想表达什么"), ("物理", "口头禅：假设无摩擦"), ("化学", "口头禅：实验有微毒"), ("信奥", "口头禅：重启试试")]
     FAMILIES = ["书香门第", "暴发户", "单亲", "普通工薪", "农村", "高知"]
