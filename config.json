@@ -1,7 +1,7 @@
 {
     "api": {
         "base_url": "https://integrate.api.nvidia.com/v1",
-        "api_key": "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",
+        "api_key": "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",
         "model": "z-ai/glm4.7",
         "max_tokens": 16384,
         "temperature": 1.0,
@@ -13,5 +13,5 @@
         "output_file": "generated_novel.txt",
         "save_state_file": "save_state.json"
     },
-    "system_prompt": "你是一个顶级爽文作家，擅长【校园修仙/数据流】。背景：拮抗中学（分数即等级，题目即魔兽）。要求：单章4000字，武侠化描写解题过程，拒绝表格，叙事细腻，群像生动。"
+    "system_prompt": "你是一个顶级爽文作家。要求：单章4000字，描写细腻。"
 }

@@ -9,78 +9,76 @@ class AIWriter:
     def __init__(self, config_path="config.json"):
         with open(config_path, "r", encoding="utf-8") as f:
             self.config = json.load(f)
-        self.client = OpenAI(base_url=self.config["api"]["base_url"], api_key=self.config["api"]["api_key"])
+        self.client = OpenAI(
+            base_url=self.config["api"]["base_url"], 
+            api_key=self.config["api"]["api_key"]
+        )
         self.model = self.config["api"]["model"]
         self.last_request_time, self.request_interval = 0, 2.0 
         self.summary_file, self.last_chapter_content = "plot_summary.txt", ""
         self.messages = []
-        self.load_history()
 
-    def load_history(self):
-        if os.path.exists("chat_history.json"):
-            try:
-                with open("chat_history.json", "r", encoding="utf-8") as f: self.messages = json.load(f)
-            except: self.messages = []
-        if not self.messages: 
-            self.messages = [{"role": "system", "content": self.config.get("system_prompt", "Initializing...")}]
-
-    def save_history(self):
-        if len(self.messages) > 100: self.messages = [self.messages[0]] + self.messages[-80:]
-        with open("chat_history.json", "w", encoding="utf-8") as f: json.dump(self.messages, f, ensure_ascii=False, indent=2)
-
-    def _call_api(self, messages, max_tokens=16384):
+    def _call_api_stream(self, messages, max_tokens=16384):
+        """核心：完全复刻宗主提供的流式调用逻辑"""
         elapsed = time.time() - self.last_request_time
         if elapsed < self.request_interval: time.sleep(self.request_interval - elapsed)
         
-        extra_body = {}
-        if "glm" in self.model.lower() and self.config["api"].get("enable_thinking"):
-            extra_body = {"chat_template_kwargs": {"enable_thinking": True, "clear_thinking": False}}
-
+        full_response = ""
         try:
             completion = self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
-                temperature=self.config["api"]["temperature"],
+                temperature=1.0,
                 top_p=1.0,
                 max_tokens=max_tokens,
-                extra_body=extra_body,
-                stream=False # main.py 逻辑基于非流式，此处保持一致
+                extra_body={"chat_template_kwargs": {"enable_thinking": True, "clear_thinking": False}},
+                stream=True
             )
+            
+            for chunk in completion:
+                if not getattr(chunk, "choices", None): continue
+                if len(chunk.choices) == 0: continue
+                delta = chunk.choices[0].delta
+                
+                # 忽略 reasoning_content (Thinking)，只采集正文 content
+                content = getattr(delta, "content", None)
+                if content is not None:
+                    full_response += content
+                    # 为了不让控制台死寂，输出个点
+                    sys.stdout.write("·"); sys.stdout.flush()
+            
             self.last_request_time = time.time()
-            return completion.choices[0].message.content
+            return full_response if full_response else None
         except Exception as e:
-            timestamp = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
-            sys.stderr.write(f"[{timestamp}] [GLM_API_ERROR] {str(e)}\n")
+            sys.stderr.write(f" [STREAM ERROR] {str(e)}\n")
             return None
 
-    def summarize_chapter(self, chapter_num, content):
-        prompt = f"请将下面内容浓缩成200字以内摘要，记录核心因果。内容：\n{content[:4000]}"
-        summary = self._call_api([{"role": "system", "content": "你是一个冷酷的档案管理员。"}, {"role": "user", "content": prompt}], max_tokens=1000)
-        if summary:
-            with open(self.summary_file, "a", encoding="utf-8") as f: f.write(f"第{chapter_num}章摘要：{summary}\n")
-            return summary
-        return "摘要生成失败"
+    def generate_quiz(self, subject, topic):
+        """让 AI 针对特定知识点出 5 道梯度难题"""
+        prompt = f"""请针对高中{subject}的知识点【{topic}】，出 5 道高质量题目。
+要求：
+1. 难度梯度：1道基础陷阱，2道中档综合，2道奥赛压轴。
+2. 内容：每道题需包含【题目】、【答案】、【致死陷阱/逻辑核心】。
+3. 严禁废话：直接输出题目内容."""
 
-    def get_full_summary(self):
-        if os.path.exists(self.summary_file):
-            with open(self.summary_file, "r", encoding="utf-8") as f: return f.read()
-        return "故事开始。"
+        messages = [
+            {"role": "system", "content": "你是一名冷酷无情的全国顶级奥赛命题专家."},
+            {"role": "user", "content": prompt}
+        ]
+        return self._call_api_stream(messages, max_tokens=4000)
 
     def generate_scene(self, prompt, stats_context, min_length=4000):
-        full_summary = self.get_full_summary()
-        
+        # ... (逻辑同前，但内部调用 _call_api_stream) ...
         messages = [
-            {"role": "system", "content": self.messages[0]["content"] + "\n重要：本章情节全部交待完毕且字数达标后，输出 [CHAPTER_END] 表示完结。"},
-            {"role": "user", "content": f"【前情提要】\n{full_summary}"},
-            {"role": "user", "content": f"【上一章（衔接）】\n{self.last_chapter_content[-2000:]}"},
-            {"role": "user", "content": f"【本章大纲与数据包】\n{prompt}\n\n【实时因果数据】\n{stats_context}\n\n请开始深思熟虑后的撰写（不少于4000字）："}
+            {"role": "system", "content": "你是一个硬核校园爽文作家。完结后输出 [CHAPTER_END]。"},
+            {"role": "user", "content": f"【数据包】\n{stats_context}\n\n【大纲】\n{prompt}\n\n请开笔（4000字+）："}
         ]
         
         full_content = ""
         while True:
-            sys.stdout.write(f" [GLM-4.7 Generating... Current: {len(full_content)} chars]\n"); sys.stdout.flush()
-            new_text = self._call_api(messages, max_tokens=16384)
-            if not new_text: time.sleep(5); continue
+            sys.stdout.write(f"\n [AI Writing... {len(full_content)} chars] "); sys.stdout.flush()
+            new_text = self._call_api_stream(messages, max_tokens=16384)
+            if not new_text: time.sleep(10); continue
             
             full_content += new_text + "\n"
             messages.append({"role": "assistant", "content": new_text})
@@ -89,14 +87,9 @@ class AIWriter:
                 full_content = full_content.replace("[CHAPTER_END]", "").strip()
                 break
             else:
-                cmd = "（字数尚浅，请继续保持深度思考，展开描写后续情节，严禁直接总结！）" if len(full_content) < min_length else "（请将剩余事件交代完整，输出 [CHAPTER_END]。）"
-                messages.append({"role": "user", "content": cmd})
+                messages.append({"role": "user", "content": "（字数不足，请继续深度扩写剧情细节，严禁收尾！）"})
         
         self.last_chapter_content = full_content
         return full_content
-
-    def generate_quiz(self, subject, topic):
-        p = f"请针对高中{subject}【{topic}】出一道极高难度的真题，含答案和深层陷阱解析。"
-        return self._call_api([{"role": "system", "content": "奥赛命题组组长。"}, {"role": "user", "content": p}], max_tokens=2000)
 
 writer = AIWriter()
