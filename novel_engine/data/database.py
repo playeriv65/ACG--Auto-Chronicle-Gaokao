@@ -41,56 +41,50 @@ class SkillTree:
         choice = random.choice(unlocked)
         return choice # (name, level, desc)
 
-class EventLibrary:
-    @staticmethod
-    def get_random_event(season="ANY"):
-        conn = DBConnector.get_connection()
-        cursor = conn.cursor()
-        
-        # Get ANY + Current Season
-        cursor.execute("SELECT description, effect FROM events WHERE season = 'ANY' OR season = ?", (season,))
-        events = cursor.fetchall()
-        conn.close()
-        
-        if not events:
-            return ("发呆", "")
-            
-        return random.choice(events) # (desc, effect)
-    
-    # For compatibility if the engine accesses EVENTS list directly (it shouldn't, but let's check BeingEngine usage)
-    # Looking at BeingEngine: self.event_pool = EventLibrary.EVENTS -> It accesses list directly.
-    # So we need to provide a property or change BeingEngine. 
-    # Let's add a property that fetches all events to maintain compatibility for now, 
-    # but ideally BeingEngine should call get_random_event.
-    # Actually, BeingEngine logic is:
-    # candidates = [(d,e) for t,d,e in self.event_pool if (week - self.global_cooldowns.get(d,-99) >= 20) and (t in ["ANY", season])]
-    # So it expects a list of (type, desc, effect).
-    
-    @property
-    def EVENTS(self):
-        conn = DBConnector.get_connection()
-        cursor = conn.cursor()
-        cursor.execute("SELECT season, description, effect FROM events")
-        events = cursor.fetchall() # List of (season, desc, effect)
-        conn.close()
-        return events
 
-# Instantiate singleton for compatibility
-EventLibrary = EventLibrary()
+def get_random_event(season="ANY"):
+    conn = DBConnector.get_connection()
+    cursor = conn.cursor()
+    
+    # Get ANY + Current Season
+    cursor.execute("SELECT description, effect FROM events WHERE season = 'ANY' OR season = ?", (season,))
+    events = cursor.fetchall()
+    conn.close()
+    
+    if not events:
+        return ("发呆", "")
+        
+    return random.choice(events) # (desc, effect)
 
 class NPCData:
     # These are now dynamic
     
+    # Cache for weighted names
+    _SURNAMES_CACHE = None
+    _SURNAMES_WEIGHTS = None
+
     @staticmethod
     def get_name(gender="M", era="00s"):
         conn = DBConnector.get_connection()
         cursor = conn.cursor()
         
-        # 1. Get a Surname
-        # Weighted random based on frequency? For now just random from list
-        cursor.execute("SELECT name FROM surnames ORDER BY RANDOM() LIMIT 1")
-        res = cursor.fetchone()
-        surname = res[0] if res else "李"
+        # 1. Get a Surname (Weighted)
+        if NPCData._SURNAMES_CACHE is None:
+            try:
+                cursor.execute("SELECT name, frequency FROM surnames")
+                rows = cursor.fetchall()
+                if rows:
+                    NPCData._SURNAMES_CACHE = [r[0] for r in rows]
+                    NPCData._SURNAMES_WEIGHTS = [r[1] for r in rows]
+                else:
+                    # Fallback
+                    NPCData._SURNAMES_CACHE = ["李", "王", "张"]
+                    NPCData._SURNAMES_WEIGHTS = [1, 1, 1]
+            except:
+                 NPCData._SURNAMES_CACHE = ["李", "王", "张"]
+                 NPCData._SURNAMES_WEIGHTS = [1, 1, 1]
+        
+        surname = random.choices(NPCData._SURNAMES_CACHE, weights=NPCData._SURNAMES_WEIGHTS, k=1)[0]
         
         # 2. Get a Given Name
         # Try to match era and gender

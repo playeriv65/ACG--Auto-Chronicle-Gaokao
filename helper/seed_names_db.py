@@ -12,26 +12,6 @@ def seed_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # 1. 姓氏表
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS surnames (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT UNIQUE,
-        frequency INTEGER DEFAULT 1
-    )
-    """)
-    
-    # 2. 名字表
-    cursor.execute("""
-    CREATE TABLE IF NOT EXISTS given_names (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        name TEXT,
-        gender TEXT, -- 'M' or 'F'
-        era TEXT,    -- '70s' (Teacher), '00s' (Student)
-        UNIQUE(name, gender, era)
-    )
-    """)
-    
     # 3. 技能表
     cursor.execute("""
     CREATE TABLE IF NOT EXISTS skills (
@@ -54,33 +34,6 @@ def seed_db():
     )
     """)
     
-    # --- Data Injection ---
-    
-    # Surnames (Common Surnames + Common Compound Surnames)
-    # Removing obscure cultivation surnames to keep it realistic
-    surnames = list("赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜戚谢邹喻柏水窦章云苏潘葛奚范彭郎鲁韦昌马苗凤花方俞任袁柳酆鲍史唐费廉岑薛雷贺倪汤滕殷罗毕郝邬安常乐于时傅皮卞齐康伍余元卜顾孟平黄和穆萧尹姚邵湛汪祁毛禹狄米贝明臧计伏成戴谈宋茅庞熊纪舒屈项祝董梁杜阮蓝闵席季麻强贾路娄危江童颜郭梅盛林刁钟徐邱骆高夏蔡田樊胡凌霍万柯卢莫房裘缪干解应宗丁宣邓郁单杭洪包诸左石崔吉钮龚程嵇邢滑裴陆荣翁荀羊於惠甄曲家封芮羿储晋汲邴糜松井段富巫乌焦巴弓牧隗山谷车侯宓蓬全郗班仰秋仲伊宫宁仇栾暴甘钭厉戎祖武符刘景詹束龙叶幸司韶郜黎蓟薄印宿白怀蒲台从鄂索咸籍赖卓蔺屠蒙池乔阴郁胥能苍双闻莘党翟谭贡劳逄姬申扶堵冉宰郦雍却璩桑桂濮牛寿通边扈燕冀温庄晏柴瞿阎充慕连茹习宦艾鱼容向古易慎戈廖庾终暨居衡步都耿满弘匡国文寇广禄阙东欧利师巩聂晁勾敖融冷訾辛阚那简饶空曾毋沙乜养鞠须丰巢关蒯相查后荆红游竺权逯盖益桓公") + ["欧阳", "上官", "司马", "诸葛", "夏侯", "皇甫", "尉迟", "端木", "公孙", "慕容", "宇文", "长孙"]
-    
-    print(f"Injecting {len(surnames)} surnames...")
-    for s in surnames:
-        if s.strip():
-            cursor.execute("INSERT OR IGNORE INTO surnames (name) VALUES (?)", (s.strip(),))
-            
-    # Given Names (70s vs 00s)
-    names_70s_m = ["建国", "建军", "志强", "志刚", "志伟", "国庆", "军", "勇", "强", "亮", "伟", "刚", "平", "兵", "雷"]
-    names_70s_f = ["秀英", "玉兰", "丽华", "艳华", "敏华", "桂芬", "红霞", "秀芬", "玉珍", "招娣", "英", "丽", "梅", "燕", "红"]
-    
-    names_00s_m = ["浩宇", "宇轩", "浩然", "子轩", "皓轩", "宇航", "梓豪", "子豪", "亦辰", "奕辰", "俊杰", "鑫", "杰", "涛", "磊", "帅"]
-    names_00s_f = ["欣怡", "梓涵", "诗涵", "梓宣", "子涵", "紫涵", "佳怡", "雨涵", "雨欣", "一诺", "梦琪", "婷", "静", "悦", "雪", "颖"]
-    
-    all_names = []
-    for n in names_70s_m: all_names.append((n, 'M', '70s'))
-    for n in names_70s_f: all_names.append((n, 'F', '70s'))
-    for n in names_00s_m: all_names.append((n, 'M', '00s'))
-    for n in names_00s_f: all_names.append((n, 'F', '00s'))
-    
-    print(f"Injecting {len(all_names)} given names...")
-    cursor.executemany("INSERT OR IGNORE INTO given_names (name, gender, era) VALUES (?, ?, ?)", all_names)
-
     # Skills from old database.py (Manual Extraction)
     skill_data = [
         ("数学", "集合的概念与表示", 1, "展开‘全集领域’..."), ("数学", "函数的概念与性质", 2, "解析敌人漏洞..."), ("数学", "指数与对数函数", 3, "战力瞬间翻倍..."), ("数学", "三角恒等变换", 4, "诱导公式迷宫..."), ("数学", "平面向量", 5, "线性打击..."), ("数学", "数列与数学归纳法", 6, "等比数列陷阱..."), ("数学", "立体几何", 7, "降维打击..."), ("数学", "解析几何", 8, "离心率锁定..."), ("数学", "导数及其应用", 9, "切线风暴..."), ("数学", "概率与统计", 10, "大数定律锁定..."),

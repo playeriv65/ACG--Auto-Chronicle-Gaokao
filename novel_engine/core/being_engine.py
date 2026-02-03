@@ -3,9 +3,11 @@ import math
 import sqlite3
 import re
 import os
-from novel_engine.data.database import SkillTree, EventLibrary, NPCData, Subject
+from novel_engine.data.database import SkillTree, get_random_event, NPCData, Subject
 from novel_engine.data.curriculum_data import Curriculum
 from novel_engine.data.quiz_data import QuizDatabase
+
+import ast
 
 class Person:
     def __init__(self, name, role, tags, gender="男"):
@@ -94,7 +96,6 @@ class BeingEngine:
         self.global_cooldowns, self.year, self.semester = {}, 1, 1
         self.last_battle_subjects = []
         self.init_world()
-        self.event_pool = EventLibrary.EVENTS
 
     def to_dict(self):
         return {"students": [s.to_dict() for s in self.students], "teachers": [t.to_dict() for t in self.teachers], "global_cooldowns": self.global_cooldowns, "year": self.year, "semester": self.semester, "last_battle_subjects": [str(s) for s in self.last_battle_subjects]}
@@ -105,6 +106,50 @@ class BeingEngine:
         self.protagonist = next((s for s in self.students if s.role == "主角"), self.students[0])
         self.global_cooldowns, self.year, self.semester = data["global_cooldowns"], data["year"], data["semester"]
         self.last_battle_subjects = data.get("last_battle_subjects", [])
+
+    def init_from_settings(self, settings_data):
+        self.students = []
+        self.teachers = []
+        
+        char_list = settings_data.get("characters", [])
+        if not char_list:
+            self.init_world()
+            return
+            
+        print(f" [Engine] Initializing from settings ({len(char_list)} students)...")
+        
+        # Recreate students from settings
+        for c in char_list:
+            name = c["name"]
+            gender = c["gender"]
+            tags = ast.literal_eval(c["tags"])
+            
+            # Determine role/archetype from name or tags
+            # In generate_full_plan, we saved protagonist as "叶凌天"
+            role = "主角" if name == "叶凌天" else "同学" # Hardcoded for now, or could inferred
+            
+            p = Person(name, role, tags, gender=gender)
+            
+            # Parse background string to restore quirks/flaws if possible
+            # Format: "[Family, Flaw, 喜欢Quirk]"
+            bg = c["background"]
+            if bg.startswith("[") and bg.endswith("]"):
+                parts = [x.strip() for x in bg[1:-1].split(",")]
+                if len(parts) >= 3:
+                    p.family = parts[0]
+                    p.flaw = parts[1]
+                    # "喜欢Quirk" -> "Quirk"
+                    p.quirk = parts[2].replace("喜欢", "")
+            
+            self.students.append(p)
+            
+        self.protagonist = next((s for s in self.students if s.role == "主角"), self.students[0])
+        
+        # Init teachers (standard)
+        for subj, desc in NPCData.TEACHER_PROFILES:
+             is_male_teacher = random.random() < 0.5
+             t_name = NPCData.get_name("M" if is_male_teacher else "F", "70s")
+             self.teachers.append(Person(t_name + "老师", "老师", [subj]))
 
     def init_world(self):
         self.protagonist = Person("叶凌天", "主角", ["做题家"], gender="男"); self.students.append(self.protagonist)
@@ -152,7 +197,7 @@ class BeingEngine:
         focus = random.sample(self.students, 3)
         if self.protagonist not in focus: focus[0] = self.protagonist
         for s in focus:
-            desc, effect = self._select_valid_event(s, abs_week, season)
+            desc, effect = get_random_event(season)
             self.global_cooldowns[desc] = abs_week; self._apply_effect(s, effect); logs.append(f"【突发】{s.name}: {desc}")
             if random.random() < (0.4 if s.role == "主角" else 0.1):
                 target_subj = random.choice(Subject.ALL); mastery_val = s.mastery.get(target_subj, s.mastery.get(str(target_subj), 0))
@@ -250,7 +295,3 @@ class BeingEngine:
             if "all_mastery+" in part: 
                 for s in Subject.ALL:
                     key = str(s); p.mastery[key] = p.mastery.get(key, 0) + 100
-
-    def _select_valid_event(self, person, week, season):
-        candidates = [(d,e) for t,d,e in self.event_pool if (week - self.global_cooldowns.get(d,-99) >= 20) and (t in ["ANY", season])]
-        return random.choice(candidates) if candidates else ("发呆", "")
