@@ -16,9 +16,10 @@ def run_compare_spirit(mode_name, enable_thinking):
 
     print(f"\n{_TITLE_COLOR}{'='*20} 开启阵法: {mode_name} {'='*20}{_RESET_COLOR}")
     
+    base_url = os.getenv("BASE_URL")
     api_key = os.getenv("API_KEY")
     client = OpenAI(
-        base_url="https://integrate.api.nvidia.com/v1",
+        base_url=base_url,
         api_key=api_key
     )
 
@@ -28,7 +29,7 @@ def run_compare_spirit(mode_name, enable_thinking):
             messages=[{"role": "user", "content": "给我出一道超难的化学推断题。"}],
             temperature=1,
             top_p=1,
-            max_tokens=2048,
+            max_tokens=128,
             extra_body={"chat_template_kwargs": {"enable_thinking": enable_thinking, "clear_thinking": True}},
             stream=True
         )
