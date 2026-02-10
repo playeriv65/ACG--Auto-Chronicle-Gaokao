@@ -1,8 +1,10 @@
+from __future__ import annotations
+
 import streamlit as st
 import sqlite3
 import pandas as pd
 import os
-import sys
+from typing import List
 
 # Set page config for better aesthetics
 st.set_page_config(
@@ -46,10 +48,10 @@ DATABASES = {
     "Course Data": os.path.join(STORAGE_DIR, "course_data.db")
 }
 
-def get_connection(db_path):
+def get_connection(db_path: str) -> sqlite3.Connection:
     return sqlite3.connect(db_path)
 
-def get_tables(db_path):
+def get_tables(db_path: str) -> List[str]:
     conn = get_connection(db_path)
     cursor = conn.cursor()
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
@@ -57,13 +59,13 @@ def get_tables(db_path):
     conn.close()
     return tables
 
-def load_data(db_path, table):
+def load_data(db_path: str, table: str) -> pd.DataFrame:
     conn = get_connection(db_path)
     df = pd.read_sql_query(f"SELECT * FROM {table}", conn)
     conn.close()
     return df
 
-def save_data(db_path, table, df):
+def save_data(db_path: str, table: str, df: pd.DataFrame) -> None:
     conn = get_connection(db_path)
     try:
         df.to_sql(table, conn, if_exists="replace", index=False)

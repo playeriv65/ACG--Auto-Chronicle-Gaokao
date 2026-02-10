@@ -23,3 +23,8 @@ include = ["novel_engine*"]
 
 [tool.uv]
 package = true
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.408",
+]

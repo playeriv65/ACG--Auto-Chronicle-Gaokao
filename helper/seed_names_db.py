@@ -1,19 +1,21 @@
+from __future__ import annotations
 
-import sqlite3
 import os
+import sqlite3
 
 DB_PATH = "novel_engine/data/storage/world_data.db"
 
-def seed_db():
+
+def seed_db() -> None:
     if os.path.exists(DB_PATH):
         os.remove(DB_PATH)
         print("Existing database removed.")
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
-    # 3. 技能表
-    cursor.execute("""
+
+    cursor.execute(
+        """
     CREATE TABLE IF NOT EXISTS skills (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         subject TEXT,
@@ -22,19 +24,20 @@ def seed_db():
         description TEXT,
         UNIQUE(subject, name)
     )
-    """)
+    """
+    )
 
-    # 4. 事件表
-    cursor.execute("""
+    cursor.execute(
+        """
     CREATE TABLE IF NOT EXISTS events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         season TEXT,
         description TEXT UNIQUE,
         effect TEXT
     )
-    """)
-    
-    # Skills from old database.py (Manual Extraction)
+    """
+    )
+
     skill_data = [
         ("数学", "集合的概念与表示", 1, "展开‘全集领域’..."), ("数学", "函数的概念与性质", 2, "解析敌人漏洞..."), ("数学", "指数与对数函数", 3, "战力瞬间翻倍..."), ("数学", "三角恒等变换", 4, "诱导公式迷宫..."), ("数学", "平面向量", 5, "线性打击..."), ("数学", "数列与数学归纳法", 6, "等比数列陷阱..."), ("数学", "立体几何", 7, "降维打击..."), ("数学", "解析几何", 8, "离心率锁定..."), ("数学", "导数及其应用", 9, "切线风暴..."), ("数学", "概率与统计", 10, "大数定律锁定..."),
         ("物理", "运动的描述", 1, "参考系预判..."), ("物理", "牛顿运动定律", 2, "反伤甲..."), ("物理", "圆周运动", 3, "向心力牵引..."), ("物理", "万有引力与航天", 4, "第一宇宙速度..."), ("物理", "机械能守恒", 5, "势能转动能..."), ("物理", "动量守恒", 6, "碰撞冲击..."), ("物理", "静电场", 7, "库仑力场..."), ("物理", "磁场与洛伦兹力", 8, "回旋加速器..."), ("物理", "电磁感应", 9, "楞次定律..."), ("物理", "波粒二象性", 10, "薛定谔的猫..."),
@@ -47,7 +50,6 @@ def seed_db():
     print(f"Injecting {len(skill_data)} skills...")
     cursor.executemany("INSERT OR IGNORE INTO skills (subject, name, level, description) VALUES (?, ?, ?, ?)", skill_data)
 
-    # Events from old database.py
     events_data = [
         ("ANY", "宿舍夜聊聊到了未来，大家都沉默了。", "mood-5"), ("ANY", "舍友打呼噜像电钻，你盯着天花板到天亮。", "fatigue+20, stress+10"),
         ("ANY", "偷偷在宿舍煮火锅，香味引来了宿管阿姨。", "stress+20"), ("ANY", "发现晾在阳台的内裤被风吹到了楼下树上。", "mood-10"),
@@ -96,6 +98,7 @@ def seed_db():
     conn.commit()
     conn.close()
     print("Database seeding completed.")
+
 
 if __name__ == "__main__":
     seed_db()

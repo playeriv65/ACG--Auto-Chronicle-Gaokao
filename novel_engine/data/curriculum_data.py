@@ -1,13 +1,30 @@
+from __future__ import annotations
 
 import sqlite3
 import os
+from typing import Dict
+
 from novel_engine.data.database import Subject
 
 DB_PATH = "novel_engine/data/storage/course_data.db"
+CurriculumMap = Dict[str, str]
+
+def _default_curriculum() -> CurriculumMap:
+    return {
+        Subject.CHN: "自主复习",
+        Subject.MATH: "自主复习",
+        Subject.ENG: "自主复习",
+        Subject.PHYS: "自主复习",
+        Subject.CHEM: "自主复习",
+        Subject.BIO: "自主复习",
+        Subject.HIST: "自主复习",
+        Subject.GEO: "自主复习",
+        Subject.POLI: "自主复习",
+    }
 
 class Curriculum:
     @staticmethod
-    def get_weekly_content(year, semester, week):
+    def get_weekly_content(year: int, semester: int, week: int) -> CurriculumMap:
         # 绝对周次计算: 每个学期20周
         abs_week = (year - 1) * 40 + (semester - 1) * 20 + week
         
@@ -38,7 +55,4 @@ class Curriculum:
                 print(f" [Curriculum DB Error] {e}")
         
         # 2. 如果数据库不可用，回退至基础逻辑 (兜底)
-        return {
-            "ALL": "自主复习",
-            "DESC": "查漏补缺 (数据库未就位或此周无记录)"
-        }
+        return _default_curriculum()
