@@ -7,6 +7,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from helpers import run_cmd
+from novel_engine.core.contracts import RuntimeState
 
 
 
@@ -38,7 +39,8 @@ def test_run_one_chapter_in_isolated_workspace(isolated_workspace: Path, repo_ro
     save_ok = False
     if save_state.exists():
         state = json.loads(save_state.read_text(encoding="utf-8"))
-        save_ok = int(state.get("chapter_count", 0)) >= 2
+        validated_state = RuntimeState.model_validate(state)
+        save_ok = validated_state.chapter_count >= 2
 
     assert chapter_ok or save_ok, (
         "CHAPTER_GENERATION_FAILED(output_validation)\n"

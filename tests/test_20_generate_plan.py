@@ -6,6 +6,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from helpers import assert_json_shape, run_cmd
+from novel_engine.core.contracts import WeeklyScript, WorldSettings
 
 
 
@@ -30,6 +31,11 @@ def test_generate_plan_in_isolated_workspace(isolated_workspace: Path, repo_root
 
     world_settings = assert_json_shape(isolated_workspace / "world_settings.json", ["meta", "characters"])
     assert isinstance(world_settings["characters"], list) and world_settings["characters"], "PLAN_GENERATION_FAILED: empty characters"
+    validated_world = WorldSettings.model_validate(world_settings)
+    assert validated_world.characters and isinstance(validated_world.characters[0].tags, list), "PLAN_GENERATION_FAILED: tags must be list"
 
     weekly_script = assert_json_shape(isolated_workspace / "weekly_script.json", ["meta", "weeks"])
     assert isinstance(weekly_script["weeks"], dict) and weekly_script["weeks"], "PLAN_GENERATION_FAILED: empty weeks"
+    validated_weekly = WeeklyScript.model_validate(weekly_script)
+    first_week = next(iter(validated_weekly.weeks.values()))
+    assert "排名:" in first_week.rankings.mc_report, "PLAN_GENERATION_FAILED: mc_report should be rendered text"

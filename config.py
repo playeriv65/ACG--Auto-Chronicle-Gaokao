@@ -6,36 +6,40 @@ from typing import Dict
 import yaml
 from dotenv import load_dotenv
 
-# 加载 .env 环境变量
 load_dotenv()
 
+
+def _require_env(name: str) -> str:
+    value = os.getenv(name)
+    if not value:
+        raise RuntimeError(f"Missing required environment variable: {name}")
+    return value
+
+
 class Config:
-    # API 配置
-    OPENAI_API_BASE: str = os.getenv("BASE_URL", "")
-    OPENAI_API_KEY: str = os.getenv("API_KEY", "")
-    
-    # 模型默认参数
-    MODEL_NAME: str = os.getenv("MODEL_NAME", "z-ai/glm4.7")
+    OPENAI_API_BASE: str = _require_env("BASE_URL")
+    OPENAI_API_KEY: str = _require_env("API_KEY")
+    MODEL_NAME: str = _require_env("MODEL_NAME")
+
     MAX_TOKENS: int = 16384
     TEMPERATURE: float = 0.7
     ENABLE_THINKING: bool = True
-    
-    # 系统提示词
+
     with open("text_for_gen/prompts.yaml", "r", encoding="utf-8") as f:
-        _prompts = yaml.safe_load(f) or {}
-        SYSTEM_PROMPT: str = f"{_prompts.get('writer_prompt', '')}\n{_prompts.get('background_prompt', '')}"
-    
-    # 路径配置
+        _prompts = yaml.safe_load(f)
+        if not isinstance(_prompts, dict):
+            raise RuntimeError("Invalid prompts.yaml format: expected mapping")
+        SYSTEM_PROMPT: str = f"{_prompts['writer_prompt']}\n{_prompts['background_prompt']}"
+
     PATHS: Dict[str, str] = {
         "WORLD_SETTINGS": "world_settings.json",
         "WEEKLY_SCRIPT": "weekly_script.json",
         "SAVE_STATE": "save_state.json",
         "COURSE_DB": "novel_engine/data/storage/course_data.db",
         "WORLD_DB": "novel_engine/data/storage/world_data.db",
-        "CHAPTERS_DIR": "novel_chapters"
+        "CHAPTERS_DIR": "novel_chapters",
     }
 
-    # Simulation constants (readability only; no logic changes)
     SCHOOL_YEARS: int = 3
     SEMESTERS_PER_YEAR: int = 2
     WEEKS_PER_SEMESTER: int = 20
@@ -56,7 +60,6 @@ class Config:
 
     CHAPTER_MIN_LENGTH: int = 4000
 
-    # Person constants
     PROTAGONIST_BASE_TALENT: int = 100
     PROTAGONIST_INFO_TALENT: int = 300
     PROTAGONIST_MASTERY_MIN: int = 100
@@ -77,7 +80,6 @@ class Config:
     DEFAULT_STRESS: int = 0
     DEFAULT_FATIGUE: int = 0
     DEFAULT_LAST_WEEK_RANK: int = 0
-    DEFAULT_SUBJECT_TALENT: int = 100
 
     EXAM_STRESS_INCREMENT: int = 15
     INFO_OPTIONAL_START_WEEK: int = 10

@@ -5,33 +5,29 @@ from __future__ import annotations
 import os
 import re
 import sqlite3
-from typing import Dict, Optional
+from typing import Dict
 
+from novel_engine.core.contracts import CurriculumWeek
 from novel_engine.core.engine_constants import CURRICULUM_SUBJECT_INDEXES
 
 
-def get_curriculum_from_db(db_path: str, abs_week: int) -> Optional[Dict[str, str]]:
+def get_curriculum_from_db(db_path: str, abs_week: int) -> CurriculumWeek:
     """Load and normalize curriculum data for the requested absolute week."""
     if not os.path.exists(db_path):
-        return None
+        raise FileNotFoundError(f"Curriculum DB not found: {db_path}")
 
-    try:
-        conn = sqlite3.connect(db_path)
+    with sqlite3.connect(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("SELECT * FROM curriculum WHERE week = ?", (abs_week,))
         row = cursor.fetchone()
-        conn.close()
 
-        if not row:
-            return None
-        return _parse_curriculum_row(row)
-    except Exception:
-        return None
+    if row is None:
+        raise ValueError(f"No curriculum data for abs_week={abs_week}")
 
+    subjects: Dict[str, str] = {}
+    for subject, idx in CURRICULUM_SUBJECT_INDEXES.items():
+        if idx >= len(row):
+            raise ValueError(f"Malformed curriculum row: missing index {idx} for {subject}")
+        subjects[subject] = re.sub(r"!\[.*?\]\(.*?\)", "", str(row[idx]))
 
-def _parse_curriculum_row(row: tuple) -> Dict[str, str]:
-    """Map DB row columns to subject names and strip markdown image tags."""
-    result = {subject: row[idx] for subject, idx in CURRICULUM_SUBJECT_INDEXES.items()}
-    for subject, value in result.items():
-        result[subject] = re.sub(r"!\[.*?\]\(.*?\)", "", str(value))
-    return result
+    return CurriculumWeek(abs_week=abs_week, subjects=subjects)

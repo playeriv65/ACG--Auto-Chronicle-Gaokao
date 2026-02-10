@@ -1,15 +1,20 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
 
 from helpers import prepare_isolated_workspace
 
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
 
 @pytest.fixture(scope="session")
 def repo_root() -> Path:
-    return Path(__file__).resolve().parents[1]
+    return ROOT
 
 
 @pytest.fixture(scope="session")
