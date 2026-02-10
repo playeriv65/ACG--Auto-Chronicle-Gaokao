@@ -15,7 +15,7 @@ class Config:
     OPENAI_API_KEY: str = os.getenv("API_KEY", "")
     
     # 模型默认参数
-    MODEL_NAME: str = "z-ai/glm4.7"
+    MODEL_NAME: str = os.getenv("MODEL_NAME", "z-ai/glm4.7")
     MAX_TOKENS: int = 16384
     TEMPERATURE: float = 0.7
     ENABLE_THINKING: bool = True

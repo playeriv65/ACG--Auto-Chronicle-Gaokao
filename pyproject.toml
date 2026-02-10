@@ -27,4 +27,6 @@ package = true
 [dependency-groups]
 dev = [
     "pyright>=1.1.408",
+    "pytest>=8.3.5",
+    "pytest-timeout>=2.4.0",
 ]

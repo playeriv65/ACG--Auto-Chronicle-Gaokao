@@ -53,3 +53,24 @@
 - **守护者**：
   - `database.py`：红尘库守护使。
   - `quiz_data.py`：文曲库守护使。
+
+## ✅ 自动化测试 (Pytest Full Chain)
+
+本项目提供按顺序执行的全链路 pytest 模块：
+
+1. `test_00_api_key.py`：真实 API key 连通性（thinking on/off）
+2. `test_10_static_checks.py`：`py_compile` + `pyright`
+3. `test_20_generate_plan.py`：隔离目录生成三年剧本
+4. `test_30_run_one_chapter.py`：隔离目录运行一章小说
+
+推荐命令：
+
+```bash
+uv run pytest -x -q tests
+```
+
+分层执行（CI 可选）：
+
+```bash
+uv run pytest -x -q tests/test_00_api_key.py tests/test_10_static_checks.py tests/test_20_generate_plan.py tests/test_30_run_one_chapter.py
+```
