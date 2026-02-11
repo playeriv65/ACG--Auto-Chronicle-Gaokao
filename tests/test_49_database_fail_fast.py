@@ -53,7 +53,7 @@ def test_database_fail_fast_on_empty_sources(monkeypatch: pytest.MonkeyPatch, tm
             database.get_random_event("SUMMER")
 
         with pytest.raises(ValueError):
-            database.NPCData.get_name("M", "00s")
+            database.NPCData.get_name(True, "00s")
 
         with pytest.raises(ValueError):
             database.NPCData.get_archetype()

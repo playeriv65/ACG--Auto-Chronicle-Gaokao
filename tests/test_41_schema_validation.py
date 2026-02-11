@@ -21,7 +21,7 @@ def test_world_settings_rejects_string_tags() -> None:
         "characters": [
             {
                 "name": "叶凌天",
-                "gender": "男",
+                "is_male": True,
                 "role": "protagonist",
                 "is_elite": False,
                 "traits": [],

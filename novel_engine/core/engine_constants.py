@@ -11,10 +11,6 @@ CORE_SUBJECTS = [Subject.MATH, Subject.PHYS, Subject.CHEM, Subject.BIO, Subject.
 
 # Semantic markers used in logs and state.
 ALL_SUBJECTS_MARKER = "全科"
-INFO_TRACK_TAG = "信奥党"
-TEACHER_ROLE = "老师"
-CLASSMATE_ROLE = "同学"
-PROTAGONIST_ROLE = "主角"
 SUMMER_SEASON = "SUMMER"
 WINTER_SEASON = "WINTER"
 

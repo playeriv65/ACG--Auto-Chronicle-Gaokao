@@ -13,361 +13,361 @@
   "characters": [
     {
       "name": "叶凌天",
-      "gender": "男",
+      "is_male": true,
       "background": "[高知, 自卑, 喜欢强迫症]",
       "tags": "['做题家']"
     },
     {
       "name": "顾辞远",
-      "gender": "男",
+      "is_male": true,
       "background": "[高知, 拖延症, 喜欢爱照镜子]",
       "tags": "['天赋怪', '卷王']"
     },
     {
       "name": "刘静",
-      "gender": "女",
+      "is_male": false,
       "background": "[书香门第, 社恐, 喜欢转笔]",
       "tags": "['卷王']"
     },
     {
       "name": "王雪",
-      "gender": "女",
+      "is_male": false,
       "background": "[高知, 社恐, 喜欢二次元]",
       "tags": "['透明人']"
     },
     {
       "name": "田亦辰",
-      "gender": "男",
+      "is_male": true,
       "background": "[单亲, 社恐, 喜欢抖腿]",
       "tags": "['天赋怪']"
     },
     {
       "name": "高子涵",
-      "gender": "女",
+      "is_male": false,
       "background": "[农村, 傲慢, 喜欢强迫症]",
       "tags": "['天赋怪']"
     },
     {
       "name": "梁雨欣",
-      "gender": "女",
+      "is_male": false,
       "background": "[普通工薪, 傲慢, 喜欢转笔]",
       "tags": "['恋爱脑']"
     },
     {
       "name": "杨梓涵",
-      "gender": "女",
+      "is_male": false,
       "background": "[普通工薪, 自卑, 喜欢抖腿]",
       "tags": "['天赋怪']"
     },
     {
       "name": "徐紫涵",
-      "gender": "女",
+      "is_male": false,
       "background": "[普通工薪, 敏感, 喜欢咬指甲]",
       "tags": "['透明人']"
     },
     {
       "name": "张佳怡",
-      "gender": "女",
+      "is_male": false,
       "background": "[暴发户, 敏感, 喜欢二次元]",
       "tags": "['恋爱脑']"
     },
     {
       "name": "胡鑫",
-      "gender": "男",
+      "is_male": true,
       "background": "[高知, 社恐, 喜欢爱照镜子]",
       "tags": "['天赋怪']"
     },
     {
       "name": "周紫涵",
-      "gender": "女",
+      "is_male": false,
       "background": "[农村, 敏感, 喜欢爱照镜子]",
       "tags": "['卷王']"
     },
     {
       "name": "刘亦辰",
-      "gender": "男",
+      "is_male": true,
       "background": "[暴发户, 自卑, 喜欢二次元]",
       "tags": "['透明人']"
     },
     {
       "name": "吴雪",
-      "gender": "女",
+      "is_male": false,
       "background": "[书香门第, 傲慢, 喜欢抖腿]",
       "tags": "['天赋怪']"
     },
     {
       "name": "刘宇航",
-      "gender": "男",
+      "is_male": true,
       "background": "[农村, 虚荣, 喜欢收集橡皮]",
       "tags": "['透明人']"
     },
     {
       "name": "刘梦琪",
-      "gender": "女",
+      "is_male": false,
       "background": "[暴发户, 虚荣, 喜欢二次元]",
       "tags": "['天赋怪']"
     },
     {
       "name": "罗亦辰",
-      "gender": "男",
+      "is_male": true,
       "background": "[书香门第, 敏感, 喜欢爱照镜子]",
       "tags": "['卷王']"
     },
     {
       "name": "张奕辰",
-      "gender": "男",
+      "is_male": true,
       "background": "[普通工薪, 拖延症, 喜欢强迫症]",
       "tags": "['透明人']"
     },
     {
       "name": "傅静",
-      "gender": "女",
+      "is_male": false,
       "background": "[普通工薪, 傲慢, 喜欢二次元]",
       "tags": "['刺头']"
     },
     {
       "name": "袁磊",
-      "gender": "男",
+      "is_male": true,
       "background": "[单亲, 傲慢, 喜欢说话结巴]",
       "tags": "['恋爱脑']"
     },
     {
       "name": "刘一诺",
-      "gender": "女",
+      "is_male": false,
       "background": "[书香门第, 暴躁, 喜欢抖腿]",
       "tags": "['刺头']"
     },
     {
       "name": "徐奕辰",
-      "gender": "男",
+      "is_male": true,
       "background": "[暴发户, 暴躁, 喜欢说话结巴]",
       "tags": "['恋爱脑']"
     },
     {
       "name": "王宇航",
-      "gender": "男",
+      "is_male": true,
       "background": "[农村, 拖延症, 喜欢咬指甲]",
       "tags": "['天赋怪']"
     },
     {
       "name": "胡宇轩",
-      "gender": "男",
+      "is_male": true,
       "background": "[高知, 虚荣, 喜欢强迫症]",
       "tags": "['透明人']"
     },
     {
       "name": "李一诺",
-      "gender": "女",
+      "is_male": false,
       "background": "[暴发户, 社恐, 喜欢收集橡皮]",
       "tags": "['刺头']"
     },
     {
       "name": "王梓涵",
-      "gender": "女",
+      "is_male": false,
       "background": "[书香门第, 拖延症, 喜欢咬指甲]",
       "tags": "['透明人']"
     },
     {
       "name": "罗浩然",
-      "gender": "男",
+      "is_male": true,
       "background": "[单亲, 拖延症, 喜欢收集橡皮]",
       "tags": "['恋爱脑']"
     },
     {
       "name": "郭紫涵",
-      "gender": "女",
+      "is_male": false,
       "background": "[书香门第, 敏感, 喜欢抖腿]",
       "tags": "['恋爱脑']"
     },
     {
       "name": "罗俊杰",
-      "gender": "男",
+      "is_male": true,
       "background": "[普通工薪, 社恐, 喜欢二次元]",
       "tags": "['刺头']"
     },
     {
       "name": "李梓涵",
-      "gender": "女",
+      "is_male": false,
       "background": "[农村, 社恐, 喜欢咬指甲]",
       "tags": "['透明人']"
     },
     {
       "name": "叶凌天",
-      "gender": "男",
+      "is_male": true,
       "background": "[高知, 自卑, 喜欢爱照镜子]",
       "tags": "['做题家']"
     },
     {
       "name": "顾辞远",
-      "gender": "男",
+      "is_male": true,
       "background": "[书香门第, 自卑, 喜欢转笔]",
       "tags": "['天赋怪', '卷王']"
     },
     {
       "name": "刘梓豪",
-      "gender": "男",
+      "is_male": true,
       "background": "[高知, 虚荣, 喜欢爱照镜子]",
       "tags": "['透明人']"
     },
     {
       "name": "黄皓轩",
-      "gender": "男",
+      "is_male": true,
       "background": "[高知, 傲慢, 喜欢咬指甲]",
       "tags": "['卷王']"
     },
     {
       "name": "胡梓涵",
-      "gender": "女",
+      "is_male": false,
       "background": "[书香门第, 社恐, 喜欢咬指甲]",
       "tags": "['天赋怪']"
     },
     {
       "name": "周雨欣",
-      "gender": "女",
+      "is_male": false,
       "background": "[农村, 暴躁, 喜欢说话结巴]",
       "tags": "['透明人']"
     },
     {
       "name": "陈雨欣",
-      "gender": "女",
+      "is_male": false,
       "background": "[单亲, 社恐, 喜欢说话结巴]",
       "tags": "['天赋怪']"
     },
     {
       "name": "周雨涵",
-      "gender": "女",
+      "is_male": false,
       "background": "[普通工薪, 拖延症, 喜欢收集橡皮]",
       "tags": "['刺头']"
     },
     {
       "name": "李浩宇",
-      "gender": "男",
+      "is_male": true,
       "background": "[书香门第, 敏感, 喜欢抖腿]",
       "tags": "['刺头']"
     },
     {
       "name": "陈鑫",
-      "gender": "男",
+      "is_male": true,
       "background": "[暴发户, 敏感, 喜欢爱照镜子]",
       "tags": "['恋爱脑']"
     },
     {
       "name": "赵颖",
-      "gender": "女",
+      "is_male": false,
       "background": "[暴发户, 虚荣, 喜欢收集橡皮]",
       "tags": "['透明人']"
     },
     {
       "name": "黄梓宣",
-      "gender": "女",
+      "is_male": false,
       "background": "[高知, 虚荣, 喜欢二次元]",
       "tags": "['卷王']"
     },
     {
       "name": "何磊",
-      "gender": "男",
+      "is_male": true,
       "background": "[普通工薪, 虚荣, 喜欢收集橡皮]",
       "tags": "['恋爱脑']"
     },
     {
       "name": "高浩宇",
-      "gender": "男",
+      "is_male": true,
       "background": "[农村, 社恐, 喜欢二次元]",
       "tags": "['透明人']"
     },
     {
       "name": "沈杰",
-      "gender": "男",
+      "is_male": true,
       "background": "[书香门第, 自卑, 喜欢转笔]",
       "tags": "['恋爱脑']"
     },
     {
       "name": "王宇轩",
-      "gender": "男",
+      "is_male": true,
       "background": "[暴发户, 敏感, 喜欢二次元]",
       "tags": "['刺头']"
     },
     {
       "name": "周欣怡",
-      "gender": "女",
+      "is_male": false,
       "background": "[书香门第, 暴躁, 喜欢爱照镜子]",
       "tags": "['刺头']"
     },
     {
       "name": "龙磊",
-      "gender": "男",
+      "is_male": true,
       "background": "[单亲, 自卑, 喜欢爱照镜子]",
       "tags": "['刺头']"
     },
     {
       "name": "郑颖",
-      "gender": "女",
+      "is_male": false,
       "background": "[普通工薪, 自卑, 喜欢转笔]",
       "tags": "['天赋怪']"
     },
     {
       "name": "刘涛",
-      "gender": "男",
+      "is_male": true,
       "background": "[书香门第, 敏感, 喜欢转笔]",
       "tags": "['刺头']"
     },
     {
       "name": "刘皓轩",
-      "gender": "男",
+      "is_male": true,
       "background": "[农村, 拖延症, 喜欢强迫症]",
       "tags": "['透明人']"
     },
     {
       "name": "王奕辰",
-      "gender": "男",
+      "is_male": true,
       "background": "[单亲, 虚荣, 喜欢强迫症]",
       "tags": "['透明人']"
     },
     {
       "name": "张亦辰",
-      "gender": "男",
+      "is_male": true,
       "background": "[高知, 拖延症, 喜欢强迫症]",
       "tags": "['恋爱脑']"
     },
     {
       "name": "马宇轩",
-      "gender": "男",
+      "is_male": true,
       "background": "[单亲, 社恐, 喜欢爱照镜子]",
       "tags": "['刺头']"
     },
     {
       "name": "张俊杰",
-      "gender": "男",
+      "is_male": true,
       "background": "[单亲, 傲慢, 喜欢转笔]",
       "tags": "['透明人']"
     },
     {
       "name": "何诗涵",
-      "gender": "女",
+      "is_male": false,
       "background": "[高知, 社恐, 喜欢转笔]",
       "tags": "['天赋怪']"
     },
     {
       "name": "王子轩",
-      "gender": "男",
+      "is_male": true,
       "background": "[高知, 敏感, 喜欢抖腿]",
       "tags": "['刺头']"
     },
     {
       "name": "李佳怡",
-      "gender": "女",
+      "is_male": false,
       "background": "[单亲, 傲慢, 喜欢收集橡皮]",
       "tags": "['天赋怪']"
     },
     {
       "name": "黄诗涵",
-      "gender": "女",
+      "is_male": false,
       "background": "[暴发户, 敏感, 喜欢转笔]",
       "tags": "['恋爱脑']"
     },
     {
       "name": "张梓宣",
-      "gender": "女",
+      "is_male": false,
       "background": "[高知, 虚荣, 喜欢咬指甲]",
       "tags": "['卷王']"
     }

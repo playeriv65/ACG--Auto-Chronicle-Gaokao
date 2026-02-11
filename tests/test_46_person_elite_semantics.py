@@ -8,9 +8,9 @@ from novel_engine.data.database import Subject
 def _build_person(*, is_elite: bool, tags: list[str]) -> Person:
     return Person(
         "测试角色",
-        "同学",
+        "classmate",
         tags,
-        "男",
+        True,
         is_elite=is_elite,
         family="普通工薪",
         quirk="转笔",

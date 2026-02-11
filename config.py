@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Dict
+from typing import Any, Dict, Mapping
 
 import yaml
 from dotenv import load_dotenv
@@ -16,6 +16,19 @@ def _require_env(name: str) -> str:
     return value
 
 
+def _require_prompt_str(prompts: Mapping[str, Any], *path: str) -> str:
+    current: Any = prompts
+    visited: list[str] = []
+    for key in path:
+        visited.append(key)
+        if not isinstance(current, Mapping) or key not in current:
+            raise RuntimeError(f"Missing prompts.yaml key: {'.'.join(visited)}")
+        current = current[key]
+    if not isinstance(current, str):
+        raise RuntimeError(f"Invalid prompts.yaml value type for {'.'.join(path)}: expected str")
+    return current
+
+
 class Config:
     OPENAI_API_BASE: str = _require_env("BASE_URL")
     OPENAI_API_KEY: str = _require_env("API_KEY")
@@ -26,10 +39,25 @@ class Config:
     ENABLE_THINKING: bool = True
 
     with open("text_for_gen/prompts.yaml", "r", encoding="utf-8") as f:
-        _prompts = yaml.safe_load(f)
-        if not isinstance(_prompts, dict):
+        _prompts_raw = yaml.safe_load(f)
+        if not isinstance(_prompts_raw, dict):
             raise RuntimeError("Invalid prompts.yaml format: expected mapping")
-        SYSTEM_PROMPT: str = f"{_prompts['writer_prompt']}\n{_prompts['background_prompt']}"
+        _prompts: dict[str, Any] = _prompts_raw
+        SYSTEM_PROMPT: str = f"{_require_prompt_str(_prompts, 'writer_prompt')}\n{_require_prompt_str(_prompts, 'background_prompt')}"
+
+        CHAPTER_END_MARKER: str = _require_prompt_str(_prompts, "ai_writer", "chapter_end_marker")
+        CONTINUE_EXPAND_PROMPT: str = _require_prompt_str(_prompts, "ai_writer", "continue_expand_prompt")
+        TRUNCATION_NOTICE: str = _require_prompt_str(_prompts, "ai_writer", "truncation_notice")
+        SCENE_USER_PROMPT_TEMPLATE: str = _require_prompt_str(_prompts, "ai_writer", "scene", "user_template")
+        QUIZ_SYSTEM_PROMPT: str = _require_prompt_str(_prompts, "ai_writer", "quiz", "system")
+        QUIZ_USER_PROMPT_TEMPLATE: str = _require_prompt_str(_prompts, "ai_writer", "quiz", "user_template")
+        SUMMARY_SYSTEM_PROMPT: str = _require_prompt_str(_prompts, "ai_writer", "summary", "system")
+        SUMMARY_INSTRUCTION_TEMPLATE: str = _require_prompt_str(_prompts, "ai_writer", "summary", "instruction_template")
+        SUMMARY_USER_PROMPT_TEMPLATE: str = _require_prompt_str(_prompts, "ai_writer", "summary", "user_template")
+        MAIN_SCENE_STATS_CONTEXT: str = _require_prompt_str(_prompts, "main", "scene_stats_context")
+        MAIN_SYSTEM_INSTRUCTION_TEMPLATE: str = _require_prompt_str(_prompts, "main", "system_instruction_template")
+        MAIN_SCENE_PROMPT_TEMPLATE: str = _require_prompt_str(_prompts, "main", "scene_prompt_template")
+        MAIN_QUIZ_EMPTY_TEXT: str = _require_prompt_str(_prompts, "main", "quiz_empty_text")
 
     PATHS: Dict[str, str] = {
         "WORLD_SETTINGS": "world_settings.json",

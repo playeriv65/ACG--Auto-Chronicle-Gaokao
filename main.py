@@ -76,11 +76,11 @@ class NovelGenerator:
 
     def _build_system_instruction(self) -> str:
         prompt_config = self.world_settings.meta.system_prompt
-        return (
-            f"你是一个{prompt_config.role}。"
-            f"风格要求：{prompt_config.style}。"
-            f"创作要求：{prompt_config.requirements}。"
-            "完结后输出 [CHAPTER_END]。"
+        return Config.MAIN_SYSTEM_INSTRUCTION_TEMPLATE.format(
+            role=prompt_config.role,
+            style=prompt_config.style,
+            requirements=prompt_config.requirements,
+            chapter_end_marker=Config.CHAPTER_END_MARKER,
         )
 
     def _build_prompt(self, date_key: str, battle_type: str, mc_detail_text: str, quiz_content: str | None) -> str:
@@ -91,12 +91,14 @@ class NovelGenerator:
             raise ValueError(f"Weekly script details missing for {date_key}")
 
         details_text = "\n".join(plan_data.details)
-        return (
-            f"【世界观】\n{self.world_settings.meta.description}\n\n"
-            f"【节点】{date_key} ({plan_data.date}) {battle_type}\n"
-            f"【剧本大纲】\n{details_text}\n"
-            f"【主角现状】{mc_detail_text}\n"
-            f"【真题回顾】{quiz_content or '暂无'}"
+        return Config.MAIN_SCENE_PROMPT_TEMPLATE.format(
+            world_description=self.world_settings.meta.description,
+            date_key=date_key,
+            plan_date=plan_data.date,
+            battle_type=battle_type,
+            details_text=details_text,
+            mc_detail_text=mc_detail_text,
+            quiz_text=quiz_content or Config.MAIN_QUIZ_EMPTY_TEXT,
         )
 
     def _advance_calendar(self) -> None:
@@ -133,7 +135,7 @@ class NovelGenerator:
             print(f"[{time.strftime('%H:%M:%S')}] Forging: {date_key}...", end="", flush=True)
             content = writer.generate_scene(
                 prompt,
-                "维持高武侠风格，写满4000字。",
+                Config.MAIN_SCENE_STATS_CONTEXT,
                 system_instruction=system_instruction,
                 min_length=Config.CHAPTER_MIN_LENGTH,
                 max_length=2000,

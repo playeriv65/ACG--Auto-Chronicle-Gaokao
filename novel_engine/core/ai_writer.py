@@ -16,9 +16,6 @@ from openai.types.chat import (
 
 QUIZ_MAX_TOKENS = 500
 SUMMARY_MAX_TOKENS = 2000
-CONTINUE_EXPAND_PROMPT = "（字数不足，请继续深度扩写剧情细节，严禁收尾！）"
-CHAPTER_END_MARKER = "[CHAPTER_END]"
-TRUNCATION_NOTICE = "\n\n（此处因篇幅过长，天道强行截断...）"
 
 
 class AIWriter:
@@ -72,10 +69,10 @@ class AIWriter:
         return ChatResponse(content=full_response).content
 
     def generate_quiz(self, subject: str, topic: str) -> str:
-        prompt = f"请针对高中{subject}知识点【{topic}】设计1道选择题。输出格式：【题目】、答案和解析。总字数控制在150字以内，不要任何废话。"
+        prompt = Config.QUIZ_USER_PROMPT_TEMPLATE.format(subject=subject, topic=topic)
         request = ChatRequest(
             messages=[
-                ChatMessage(role="system", content="你是一名精准的命题机器。"),
+                ChatMessage(role="system", content=Config.QUIZ_SYSTEM_PROMPT),
                 ChatMessage(role="user", content=prompt),
             ],
             max_tokens=QUIZ_MAX_TOKENS,
@@ -92,7 +89,10 @@ class AIWriter:
     ) -> str:
         messages: List[ChatMessage] = [
             ChatMessage(role="system", content=system_instruction or Config.SYSTEM_PROMPT),
-            ChatMessage(role="user", content=f"【数据包】\n{stats_context}\n\n【大纲】\n{prompt}\n\n请开笔："),
+            ChatMessage(
+                role="user",
+                content=Config.SCENE_USER_PROMPT_TEMPLATE.format(stats_context=stats_context, prompt=prompt),
+            ),
         ]
 
         full_content = ""
@@ -105,14 +105,14 @@ class AIWriter:
             full_content += new_text + "\n"
             messages.append(ChatMessage(role="assistant", content=new_text))
 
-            if CHAPTER_END_MARKER in full_content and len(full_content) >= min_length:
-                full_content = full_content.replace(CHAPTER_END_MARKER, "").strip()
+            if Config.CHAPTER_END_MARKER in full_content and len(full_content) >= min_length:
+                full_content = full_content.replace(Config.CHAPTER_END_MARKER, "").strip()
                 break
             if len(full_content) >= max_length:
-                full_content = full_content[:max_length].strip() + TRUNCATION_NOTICE
+                full_content = full_content[:max_length].strip() + Config.TRUNCATION_NOTICE
                 break
 
-            messages.append(ChatMessage(role="user", content=CONTINUE_EXPAND_PROMPT))
+            messages.append(ChatMessage(role="user", content=Config.CONTINUE_EXPAND_PROMPT))
 
         if not full_content.strip():
             raise RuntimeError("Generated scene is empty")
@@ -121,11 +121,14 @@ class AIWriter:
         return full_content
 
     def summarize_chapter(self, chapter_num: int, content: str) -> str:
-        prompt = f"请简要总结第{chapter_num}章的核心剧情发展、人物变动和关键信息。字数控制在200字以内。"
+        prompt = Config.SUMMARY_INSTRUCTION_TEMPLATE.format(chapter_num=chapter_num)
         request = ChatRequest(
             messages=[
-                ChatMessage(role="system", content="你是一个严谨的剧情记录员。"),
-                ChatMessage(role="user", content=f"【章节内容】\n{content}\n\n【指令】\n{prompt}"),
+                ChatMessage(role="system", content=Config.SUMMARY_SYSTEM_PROMPT),
+                ChatMessage(
+                    role="user",
+                    content=Config.SUMMARY_USER_PROMPT_TEMPLATE.format(content=content, instruction=prompt),
+                ),
             ],
             max_tokens=SUMMARY_MAX_TOKENS,
         )

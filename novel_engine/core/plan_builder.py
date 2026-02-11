@@ -108,7 +108,7 @@ class PlanBuilder:
                     requirements="单章4000字，禁止烂尾，多用短句，节奏紧凑",
                 ),
             ),
-            characters=[engine.build_character_profile(student) for student in engine.students],
+            characters=[engine.build_person_profile(student) for student in engine.students],
         )
 
     def _build_weekly_script_template(self) -> WeeklyScript:

@@ -7,8 +7,8 @@ import random
 from typing import Dict, List, Sequence
 
 from config import Config
-from novel_engine.core.contracts import PersonState, SkillState, TraitType
-from novel_engine.core.engine_constants import ALL_SUBJECTS_MARKER, PROTAGONIST_ROLE
+from novel_engine.core.contracts import PersonProfile, PersonState, RoleType, SkillState, TraitType
+from novel_engine.core.engine_constants import ALL_SUBJECTS_MARKER
 from novel_engine.data.database import Subject
 
 
@@ -18,9 +18,9 @@ class Person:
     def __init__(
         self,
         name: str,
-        role: str,
+        role: RoleType,
         tags: List[str],
-        gender: str,
+        is_male: bool,
         *,
         is_elite: bool,
         family: str,
@@ -29,9 +29,9 @@ class Person:
         traits: List[TraitType] | None = None,
     ):
         self.name: str = name
-        self.role: str = role
+        self.role: RoleType = role
         self.tags: List[str] = tags
-        self.gender: str = gender
+        self.is_male: bool = is_male
         self.is_elite: bool = is_elite
         self.traits: List[TraitType] = list(traits or [])
 
@@ -39,7 +39,7 @@ class Person:
         self.quirk: str = quirk
         self.flaw: str = flaw
 
-        if role == PROTAGONIST_ROLE:
+        if role == "protagonist":
             self.talent = self._build_protagonist_talent()
             self.mastery = self._build_protagonist_mastery()
         else:
@@ -55,6 +55,7 @@ class Person:
         self.last_week_rank: int = Config.DEFAULT_LAST_WEEK_RANK
 
     INFO_TRACK_TRAIT: TraitType = "info_track"
+    ELITE_TRAIT: TraitType = "elite"
 
     def _build_protagonist_talent(self) -> Dict[str, int]:
         talent = {subject: Config.PROTAGONIST_BASE_TALENT for subject in Subject.ALL}
@@ -86,7 +87,7 @@ class Person:
             tags=self.tags,
             traits=self.traits,
             is_elite=self.is_elite,
-            gender=self.gender,
+            is_male=self.is_male,
             family=self.family,
             quirk=self.quirk,
             flaw=self.flaw,
@@ -106,12 +107,42 @@ class Person:
         return trait in self.traits
 
     @staticmethod
+    def from_profile(profile: PersonProfile) -> "Person":
+        return Person(
+            profile.name,
+            profile.role,
+            list(profile.tags),
+            profile.is_male,
+            is_elite=profile.is_elite,
+            family=profile.family,
+            quirk=profile.quirk,
+            flaw=profile.flaw,
+            traits=list(profile.traits),
+        )
+
+    def to_profile(self) -> PersonProfile:
+        traits: List[TraitType] = list(self.traits)
+        if self.is_elite and self.ELITE_TRAIT not in traits:
+            traits.append(self.ELITE_TRAIT)
+        return PersonProfile(
+            name=self.name,
+            is_male=self.is_male,
+            role=self.role,
+            is_elite=self.is_elite,
+            traits=traits,
+            tags=list(self.tags),
+            family=self.family,
+            flaw=self.flaw,
+            quirk=self.quirk,
+        )
+
+    @staticmethod
     def from_state(state: PersonState) -> "Person":
         person = Person(
             state.name,
             state.role,
             list(state.tags),
-            state.gender,
+            state.is_male,
             is_elite=state.is_elite,
             family=state.family,
             quirk=state.quirk,
@@ -185,7 +216,7 @@ class Person:
             growth = self.talent[subject] * Config.BASE_GROWTH_FACTOR * inhibition
             if self.is_elite:
                 growth *= Config.ELITE_GROWTH_MULTIPLIER
-            if self.role == PROTAGONIST_ROLE and subject == Subject.INFO:
+            if self.role == "protagonist" and subject == Subject.INFO:
                 growth *= Config.INFO_GROWTH_MULTIPLIER
 
             if subject in focus_set:

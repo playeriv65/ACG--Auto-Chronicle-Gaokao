@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-from novel_engine.core.presenters import render_mc_report, render_student_detail
-from novel_engine.core.view_models import MCReportDTO, StudentDetailDTO
+from novel_engine.core.presenters import render_battle_report, render_mc_report, render_student_detail
+from novel_engine.core.view_models import BattleReportDTO, MCReportDTO, StudentDetailDTO
 
 
 def test_render_student_detail_stable() -> None:
     dto = StudentDetailDTO(
         name="叶凌天",
-        gender="男",
+        is_male=True,
         soul_desc="[普通工薪, 拖延症, 喜欢转笔]",
         last_week_rank=3,
         total_mastery=12345,
@@ -30,3 +30,18 @@ def test_render_mc_report_uses_presenter_default_for_empty_skill() -> None:
     dto = MCReportDTO(rank=5, latest_skill=None, stress=12)
     text = render_mc_report(dto)
     assert text == "排名:5 | 技能:无 | 压力:12"
+
+
+def test_render_battle_report_stable() -> None:
+    dto = BattleReportDTO(
+        scene="监考老师祭出‘信号屏蔽仪’，全场灵气被封印。",
+        protagonist_name="叶凌天",
+        top_student_name="林清北",
+        mc_score=480,
+        rival_score=470,
+        diff=10,
+        latest_skill="构造法",
+    )
+    text = render_battle_report(dto)
+    assert text.startswith("【战报】监考老师祭出‘信号屏蔽仪’，全场灵气被封印。")
+    assert "我方战力:480 vs 榜首:470" in text

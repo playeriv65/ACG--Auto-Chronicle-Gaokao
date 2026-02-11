@@ -12,3 +12,43 @@ background_prompt: |
 
 contest_prompt: |
   学生们不仅要面对激烈的语数英理化生文化课竞争，更要应对数理化生信息竞赛的残酷竞争，其中又以信息竞赛最为残酷。每一门竞赛都是高考科目眼中的旁门左道，竞赛教练却都有着扫地僧一般的修为，选择参加竞赛的学生，要么走火入魔，要么一飞冲天。
+
+ai_writer:
+  chapter_end_marker: "[CHAPTER_END]"
+  continue_expand_prompt: "（字数不足，请继续深度扩写剧情细节，严禁收尾！）"
+  truncation_notice: "\n\n（此处因篇幅过长，天道强行截断...）"
+  scene:
+    user_template: |
+      【数据包】
+      {stats_context}
+
+      【大纲】
+      {prompt}
+
+      请开笔：
+  quiz:
+    system: "你是一名精准的命题机器。"
+    user_template: "请针对高中{subject}知识点【{topic}】设计1道选择题。输出格式：【题目】、答案和解析。总字数控制在150字以内，不要任何废话。"
+  summary:
+    system: "你是一个严谨的剧情记录员。"
+    instruction_template: "请简要总结第{chapter_num}章的核心剧情发展、人物变动和关键信息。字数控制在200字以内。"
+    user_template: |
+      【章节内容】
+      {content}
+
+      【指令】
+      {instruction}
+
+main:
+  scene_stats_context: "维持高武侠风格，写满4000字。"
+  system_instruction_template: "你是一个{role}。风格要求：{style}。创作要求：{requirements}。完结后输出 {chapter_end_marker}。"
+  scene_prompt_template: |
+    【世界观】
+    {world_description}
+
+    【节点】{date_key} ({plan_date}) {battle_type}
+    【剧本大纲】
+    {details_text}
+    【主角现状】{mc_detail_text}
+    【真题回顾】{quiz_text}
+  quiz_empty_text: "暂无"

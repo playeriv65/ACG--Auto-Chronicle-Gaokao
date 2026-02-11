@@ -10,6 +10,7 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+RoleType = Literal["protagonist", "classmate", "teacher"]
 TraitType = Literal["elite", "info_track", "hardcore"]
 
 
@@ -19,10 +20,10 @@ class SkillState(StrictModel):
     description: str
 
 
-class CharacterProfile(StrictModel):
+class PersonProfile(StrictModel):
     name: str
-    gender: Literal["男", "女"] | str
-    role: Literal["protagonist", "classmate", "teacher"]
+    is_male: bool
+    role: RoleType
     is_elite: bool
     traits: List[TraitType]
     tags: List[str]
@@ -47,7 +48,7 @@ class WorldSettingsMeta(StrictModel):
 
 class WorldSettings(StrictModel):
     meta: WorldSettingsMeta
-    characters: List[CharacterProfile]
+    characters: List[PersonProfile]
 
 
 class WeeklyScriptMeta(StrictModel):
@@ -109,11 +110,11 @@ class QuizContent(StrictModel):
 
 class PersonState(StrictModel):
     name: str
-    role: str
+    role: RoleType
     tags: List[str]
     traits: List[TraitType]
     is_elite: bool
-    gender: str
+    is_male: bool
     family: str
     quirk: str
     flaw: str

@@ -45,7 +45,7 @@ def test_init_from_settings_rejects_invalid_role() -> None:
         "characters": [
             {
                 "name": "叶凌天",
-                "gender": "男",
+                "is_male": True,
                 "role": "invalid-role",
                 "is_elite": False,
                 "traits": [],

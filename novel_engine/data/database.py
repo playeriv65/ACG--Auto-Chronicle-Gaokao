@@ -5,9 +5,13 @@ import random
 import sqlite3
 from typing import Any, ClassVar, Sequence
 
-from novel_engine.core.contracts import StrictModel
+from pydantic import BaseModel, ConfigDict
 
 DB_PATH = "novel_engine/data/storage/world_data.db"
+
+
+class StrictModel(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
 
 class Subject:
@@ -116,7 +120,7 @@ class NPCData:
             conn.close()
 
     @classmethod
-    def get_name(cls, gender: str = "M", era: str = "00s") -> str:
+    def get_name(cls, is_male: bool = True, era: str = "00s") -> str:
         if cls._SURNAMES_CACHE is None:
             rows = cls._fetch_all("SELECT name, frequency FROM surnames")
             if not rows:
@@ -124,14 +128,18 @@ class NPCData:
             cls._SURNAMES_CACHE, cls._SURNAMES_WEIGHTS_CACHE = zip(*rows)
 
         surname = random.choices(cls._SURNAMES_CACHE, weights=cls._SURNAMES_WEIGHTS_CACHE, k=1)[0]
+        gender_code = "M" if is_male else "F"
 
         conn = DBConnector.get_connection()
         try:
             cursor = conn.cursor()
-            cursor.execute("SELECT name FROM given_names WHERE gender = ? AND era = ? ORDER BY RANDOM() LIMIT 1", (gender, era))
+            cursor.execute(
+                "SELECT name FROM given_names WHERE gender = ? AND era = ? ORDER BY RANDOM() LIMIT 1",
+                (gender_code, era),
+            )
             res = cursor.fetchone()
             if not res:
-                raise ValueError(f"No given_names found for gender={gender} era={era}")
+                raise ValueError(f"No given_names found for gender={gender_code} era={era}")
             return surname + res[0]
         finally:
             conn.close()

@@ -3,37 +3,33 @@ from __future__ import annotations
 """Main world simulation orchestrator."""
 
 import random
-from typing import Dict, List, Literal, Sequence, Tuple
+from typing import Dict, List, Sequence, Tuple
 
 from config import Config
 
-from novel_engine.core.contracts import CharacterProfile, EngineState, QuizContent, SkillState, TraitType, WorldSettings
+from novel_engine.core.contracts import (
+    EngineState,
+    PersonProfile,
+    QuizContent,
+    RoleType,
+    SkillState,
+    TraitType,
+    WorldSettings,
+)
 from novel_engine.core.effects import apply_effect
 from novel_engine.core.engine_constants import (
     ALL_SUBJECTS_MARKER,
-    CLASSMATE_ROLE,
     CORE_SUBJECTS,
-    PROTAGONIST_ROLE,
     SUMMER_SEASON,
-    TEACHER_ROLE,
     WINTER_SEASON,
 )
 from novel_engine.core.engine_io import get_curriculum_from_db
 from novel_engine.core.person import Person
-from novel_engine.core.view_models import MCReportDTO, StudentDetailDTO
+from novel_engine.core.presenters import render_battle_report
+from novel_engine.core.view_models import BattleReportDTO, MCReportDTO, StudentDetailDTO
 from novel_engine.data.database import NPCData, SkillTree, Subject, get_random_event
 from novel_engine.data.quiz_data import QuizDatabase
 
-ProfileRole = Literal["protagonist", "classmate", "teacher"]
-
-PROFILE_ROLE_TO_ENGINE_ROLE: dict[ProfileRole, str] = {
-    "protagonist": PROTAGONIST_ROLE,
-    "classmate": CLASSMATE_ROLE,
-    "teacher": TEACHER_ROLE,
-}
-ENGINE_ROLE_TO_PROFILE_ROLE: dict[str, ProfileRole] = {
-    engine_role: profile_role for profile_role, engine_role in PROFILE_ROLE_TO_ENGINE_ROLE.items()
-}
 INFO_TRACK_TRAIT: TraitType = "info_track"
 ELITE_TRAIT: TraitType = "elite"
 HARDCORE_TRAIT: TraitType = "hardcore"
@@ -67,7 +63,7 @@ class BeingEngine:
     def from_state(self, state: EngineState) -> None:
         self.students = [Person.from_state(s) for s in state.students]
         self.teachers = [Person.from_state(t) for t in state.teachers]
-        protagonist = next((s for s in self.students if s.role == PROTAGONIST_ROLE), None)
+        protagonist = next((s for s in self.students if s.role == "protagonist"), None)
         if protagonist is None:
             raise ValueError("Invalid engine state: protagonist not found")
         self.protagonist = protagonist
@@ -87,24 +83,13 @@ class BeingEngine:
         print(f" [Engine] Initializing from settings ({len(settings.characters)} students)...")
 
         for char in settings.characters:
-            engine_role = PROFILE_ROLE_TO_ENGINE_ROLE[char.role]
-            person = self._create_person(
-                name=char.name,
-                role=engine_role,
-                tags=list(char.tags),
-                gender=char.gender,
-                is_elite=char.is_elite,
-                traits=list(char.traits),
-                family=char.family,
-                quirk=char.quirk,
-                flaw=char.flaw,
-            )
-            if engine_role == TEACHER_ROLE:
+            person = self.create_person(char)
+            if char.role == "teacher":
                 self.teachers.append(person)
             else:
                 self.students.append(person)
 
-        protagonist = next((s for s in self.students if s.role == PROTAGONIST_ROLE), None)
+        protagonist = next((s for s in self.students if s.role == "protagonist"), None)
         if protagonist is None:
             raise ValueError("world settings does not contain protagonist")
         self.protagonist = protagonist
@@ -112,64 +97,37 @@ class BeingEngine:
     def init_world(self) -> None:
         self.students = []
         self.teachers = []
+        self._init_core_students()
+        self._spawn_classmates()
+        self._spawn_teachers()
 
-        protagonist = self._create_person(
-            name=Config.PROTAGONIST_NAME,
-            role=PROTAGONIST_ROLE,
-            tags=["做题家"],
-            gender="男",
-            is_elite=False,
-            traits=[HARDCORE_TRAIT],
-        )
+    def _init_core_students(self) -> None:
+        protagonist = self.create_person(self._build_protagonist_profile())
         self.protagonist = protagonist
         self.students.append(protagonist)
 
-        rival = self._create_person(
-            name=Config.RIVAL_NAME,
-            role=CLASSMATE_ROLE,
-            tags=["天赋怪", "卷王"],
-            gender="男",
-            is_elite=True,
-            traits=[ELITE_TRAIT, HARDCORE_TRAIT],
-        )
+        rival = self.create_person(self._build_rival_profile())
         rival.mastery = {s: 4000.0 for s in Subject.ALL}
         self.students.append(rival)
 
+    def _spawn_classmates(self) -> None:
         used = {Config.PROTAGONIST_NAME, Config.RIVAL_NAME}
         for _ in range(Config.DEFAULT_CLASSMATE_COUNT):
             is_male = random.random() < 0.5
-            gender = "男" if is_male else "女"
-            name = NPCData.get_name("M" if is_male else "F", "00s")
+            name = NPCData.get_name(is_male, "00s")
             while name in used:
-                name = NPCData.get_name("M" if is_male else "F", "00s")
+                name = NPCData.get_name(is_male, "00s")
             used.add(name)
             archetype_name = random.choice(NPCData.ARCHETYPES).name
-            is_elite = archetype_name in Config.ELITE_TAGS
-            traits: List[TraitType] = [ELITE_TRAIT] if is_elite else []
-            self.students.append(
-                self._create_person(
-                    name=name,
-                    role=CLASSMATE_ROLE,
-                    tags=[archetype_name],
-                    gender=gender,
-                    is_elite=is_elite,
-                    traits=traits,
-                )
-            )
+            profile = self._build_classmate_profile(name=name, is_male=is_male, archetype_name=archetype_name)
+            self.students.append(self.create_person(profile))
 
+    def _spawn_teachers(self) -> None:
         for profile in NPCData.TEACHER_PROFILES:
             is_male_teacher = random.random() < 0.5
-            name = NPCData.get_name("M" if is_male_teacher else "F", "70s")
-            self.teachers.append(
-                self._create_person(
-                    name=name + "老师",
-                    role=TEACHER_ROLE,
-                    tags=[profile.subject],
-                    gender="男" if is_male_teacher else "女",
-                    is_elite=False,
-                    traits=[],
-                )
-            )
+            name = NPCData.get_name(is_male_teacher, "70s")
+            teacher_profile = self._build_teacher_profile(name=name, is_male=is_male_teacher, subject=profile.subject)
+            self.teachers.append(self.create_person(teacher_profile))
 
     def tick(self, week_idx: int) -> Tuple[List[str], str, QuizContent | None]:
         abs_week = (self.year - 1) * Config.WEEKS_PER_YEAR + (self.semester - 1) * Config.WEEKS_PER_SEMESTER + week_idx
@@ -218,31 +176,15 @@ class BeingEngine:
         skills = [skill.name for skill in student.skills]
         return StudentDetailDTO(
             name=student.name,
-            gender=student.gender,
+            is_male=student.is_male,
             soul_desc=student.get_soul_desc(),
             last_week_rank=student.last_week_rank,
             total_mastery=total_mastery,
             skills=skills,
         )
 
-    def build_character_profile(self, person: Person) -> CharacterProfile:
-        if person.role not in ENGINE_ROLE_TO_PROFILE_ROLE:
-            raise ValueError(f"Unsupported person role: {person.role}")
-        profile_role = ENGINE_ROLE_TO_PROFILE_ROLE[person.role]
-        traits: List[TraitType] = list(person.traits)
-        if person.is_elite and ELITE_TRAIT not in traits:
-            traits.append(ELITE_TRAIT)
-        return CharacterProfile(
-            name=person.name,
-            gender=person.gender,
-            role=profile_role,
-            is_elite=person.is_elite,
-            traits=traits,
-            tags=list(person.tags),
-            family=person.family,
-            flaw=person.flaw,
-            quirk=person.quirk,
-        )
+    def build_person_profile(self, person: Person) -> PersonProfile:
+        return person.to_profile()
 
     def build_quiz_prompt_payload(self, quiz_result: QuizContent | None) -> str | None:
         if quiz_result is None:
@@ -312,7 +254,7 @@ class BeingEngine:
 
             unlock_prob = (
                 Config.PROTAGONIST_SKILL_BREAKTHROUGH_PROB
-                if student.role == PROTAGONIST_ROLE
+                if student.role == "protagonist"
                 else Config.NORMAL_STUDENT_SKILL_BREAKTHROUGH_PROB
             )
             if random.random() < unlock_prob:
@@ -333,6 +275,7 @@ class BeingEngine:
         top_student = self.rankings[0]
         rival_score = sum(top_student.get_exam_score(s) for s in score_subjects)
         diff = mc_score - rival_score
+        latest_skill = self.protagonist.skills[-1].name if self.protagonist.skills else None
 
         scenes = [
             "监考老师祭出‘信号屏蔽仪’，全场灵气被封印。",
@@ -341,16 +284,19 @@ class BeingEngine:
             "隔壁班学霸开启了‘抖腿光环’，引发地震波攻击。",
             f"{top_student.name}眼神冰冷，随手丢出一招‘洛必达法则’。",
         ]
-        if diff > 10:
-            if not self.protagonist.skills:
-                raise RuntimeError("Protagonist has no skill for dominant victory report")
-            skill_name = self.protagonist.skills[-1].name
-            result = f"{self.protagonist.name}使用了‘{skill_name}’，提前交卷，留下一个孤傲的背影。"
-        elif diff > -20:
-            result = f"{self.protagonist.name}与{top_student.name}在分数线上反复拉锯，最终险胜/惜败。"
-        else:
-            result = f"{self.protagonist.name}被压轴题镇压，道心破碎，看着{top_student.name}绝尘而去。"
-        return f"【战报】{random.choice(scenes)} {result} (我方战力:{mc_score} vs 榜首:{rival_score})"
+        if diff > 10 and latest_skill is None:
+            raise RuntimeError("Protagonist has no skill for dominant victory report")
+
+        dto = BattleReportDTO(
+            scene=random.choice(scenes),
+            protagonist_name=self.protagonist.name,
+            top_student_name=top_student.name,
+            mc_score=mc_score,
+            rival_score=rival_score,
+            diff=diff,
+            latest_skill=latest_skill,
+        )
+        return render_battle_report(dto)
 
     def _update_week_ranks(self) -> None:
         rank_map = self._build_rank_map(self.rankings)
@@ -371,27 +317,70 @@ class BeingEngine:
         topic = curriculum_subjects[subject]
         return QuizDatabase.get_quiz(subject, topic)
 
-    def _create_person(
+    def _build_profile(
         self,
         *,
         name: str,
-        role: str,
+        role: RoleType,
         tags: List[str],
-        gender: str,
-        is_elite: bool,
-        traits: List[TraitType],
-        family: str | None = None,
-        quirk: str | None = None,
-        flaw: str | None = None,
-    ) -> Person:
-        return Person(
-            name,
-            role,
-            tags,
-            gender,
+        is_male: bool,
+        is_elite: bool = False,
+        traits: List[TraitType] | None = None,
+    ) -> PersonProfile:
+        family, quirk, flaw = self._sample_background()
+        return PersonProfile(
+            name=name,
+            is_male=is_male,
+            role=role,
+            tags=tags,
             is_elite=is_elite,
-            family=family or NPCData.get_family(),
-            quirk=quirk or NPCData.get_quirk(),
-            flaw=flaw or NPCData.get_flaw(),
+            traits=list(traits or []),
+            family=family,
+            quirk=quirk,
+            flaw=flaw,
+        )
+
+    def _build_protagonist_profile(self) -> PersonProfile:
+        return self._build_profile(
+            name=Config.PROTAGONIST_NAME,
+            role="protagonist",
+            tags=["做题家"],
+            is_male=True,
+            traits=[HARDCORE_TRAIT],
+        )
+
+    def _build_rival_profile(self) -> PersonProfile:
+        return self._build_profile(
+            name=Config.RIVAL_NAME,
+            role="classmate",
+            tags=["天赋怪", "卷王"],
+            is_male=True,
+            is_elite=True,
+            traits=[ELITE_TRAIT, HARDCORE_TRAIT],
+        )
+
+    def _build_classmate_profile(self, *, name: str, is_male: bool, archetype_name: str) -> PersonProfile:
+        is_elite = archetype_name in Config.ELITE_TAGS
+        traits: List[TraitType] = [ELITE_TRAIT] if is_elite else []
+        return self._build_profile(
+            name=name,
+            role="classmate",
+            tags=[archetype_name],
+            is_male=is_male,
+            is_elite=is_elite,
             traits=traits,
         )
+
+    def _build_teacher_profile(self, *, name: str, is_male: bool, subject: str) -> PersonProfile:
+        return self._build_profile(
+            name=name,
+            role="teacher",
+            tags=[subject],
+            is_male=is_male,
+        )
+
+    def create_person(self, profile: PersonProfile) -> Person:
+        return Person.from_profile(profile)
+
+    def _sample_background(self) -> tuple[str, str, str]:
+        return NPCData.get_family(), NPCData.get_quirk(), NPCData.get_flaw()
