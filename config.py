@@ -63,6 +63,7 @@ class Config:
         "WORLD_SETTINGS": "world_settings.json",
         "WEEKLY_SCRIPT": "weekly_script.json",
         "SAVE_STATE": "save_state.json",
+        "SIMULATION_LOG": "simulation_trace.jsonl",
         "COURSE_DB": "novel_engine/data/storage/course_data.db",
         "WORLD_DB": "novel_engine/data/storage/world_data.db",
         "CHAPTERS_DIR": "novel_chapters",

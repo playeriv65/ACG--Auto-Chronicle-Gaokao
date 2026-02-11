@@ -2,16 +2,16 @@ from __future__ import annotations
 
 """Main world simulation orchestrator."""
 
+import json
 import random
+import time
 from typing import Dict, List, Sequence, Tuple
 
 from config import Config
-
 from novel_engine.core.contracts import (
     EngineState,
     PersonProfile,
     QuizContent,
-    RoleType,
     SkillState,
     TraitType,
     WorldSettings,
@@ -23,20 +23,20 @@ from novel_engine.core.engine_constants import (
     SUMMER_SEASON,
     WINTER_SEASON,
 )
+from novel_engine.core.engine_initializer import EngineInitializer
 from novel_engine.core.engine_io import get_curriculum_from_db
+from novel_engine.core.engine_queries import EngineQueryService
 from novel_engine.core.person import Person
 from novel_engine.core.presenters import render_battle_report
 from novel_engine.core.view_models import BattleReportDTO, MCReportDTO, StudentDetailDTO
-from novel_engine.data.database import NPCData, SkillTree, Subject, get_random_event
+from novel_engine.data.database import SkillTree, Subject, get_random_event
 from novel_engine.data.quiz_data import QuizDatabase
 
 INFO_TRACK_TRAIT: TraitType = "info_track"
-ELITE_TRAIT: TraitType = "elite"
-HARDCORE_TRAIT: TraitType = "hardcore"
 
 
 class BeingEngine:
-    """Coordinates weekly simulation, events, rankings and quiz context."""
+    """Coordinates weekly simulation, world initialization and query DTO building."""
 
     def __init__(self) -> None:
         self.db_path: str = Config.PATHS["COURSE_DB"]
@@ -48,6 +48,11 @@ class BeingEngine:
         self.year: int = 1
         self.semester: int = 1
         self.last_battle_subjects: List[str] = []
+        self.simulation_source: str = "runtime"
+        self.simulation_log_path: str = Config.PATHS["SIMULATION_LOG"]
+
+        self.initializer = EngineInitializer(self)
+        self.queries = EngineQueryService(self)
         self.init_world()
 
     def to_state(self) -> EngineState:
@@ -74,60 +79,10 @@ class BeingEngine:
         self.last_battle_subjects = list(state.last_battle_subjects)
 
     def init_from_settings(self, settings: WorldSettings) -> None:
-        self.students = []
-        self.teachers = []
-
-        if not settings.characters:
-            raise ValueError("world settings must contain at least one character")
-
-        print(f" [Engine] Initializing from settings ({len(settings.characters)} students)...")
-
-        for char in settings.characters:
-            person = self.create_person(char)
-            if char.role == "teacher":
-                self.teachers.append(person)
-            else:
-                self.students.append(person)
-
-        protagonist = next((s for s in self.students if s.role == "protagonist"), None)
-        if protagonist is None:
-            raise ValueError("world settings does not contain protagonist")
-        self.protagonist = protagonist
+        self.initializer.init_from_settings(settings)
 
     def init_world(self) -> None:
-        self.students = []
-        self.teachers = []
-        self._init_core_students()
-        self._spawn_classmates()
-        self._spawn_teachers()
-
-    def _init_core_students(self) -> None:
-        protagonist = self.create_person(self._build_protagonist_profile())
-        self.protagonist = protagonist
-        self.students.append(protagonist)
-
-        rival = self.create_person(self._build_rival_profile())
-        rival.mastery = {s: 4000.0 for s in Subject.ALL}
-        self.students.append(rival)
-
-    def _spawn_classmates(self) -> None:
-        used = {Config.PROTAGONIST_NAME, Config.RIVAL_NAME}
-        for _ in range(Config.DEFAULT_CLASSMATE_COUNT):
-            is_male = random.random() < 0.5
-            name = NPCData.get_name(is_male, "00s")
-            while name in used:
-                name = NPCData.get_name(is_male, "00s")
-            used.add(name)
-            archetype_name = random.choice(NPCData.ARCHETYPES).name
-            profile = self._build_classmate_profile(name=name, is_male=is_male, archetype_name=archetype_name)
-            self.students.append(self.create_person(profile))
-
-    def _spawn_teachers(self) -> None:
-        for profile in NPCData.TEACHER_PROFILES:
-            is_male_teacher = random.random() < 0.5
-            name = NPCData.get_name(is_male_teacher, "70s")
-            teacher_profile = self._build_teacher_profile(name=name, is_male=is_male_teacher, subject=profile.subject)
-            self.teachers.append(self.create_person(teacher_profile))
+        self.initializer.init_world()
 
     def tick(self, week_idx: int) -> Tuple[List[str], str, QuizContent | None]:
         abs_week = (self.year - 1) * Config.WEEKS_PER_YEAR + (self.semester - 1) * Config.WEEKS_PER_SEMESTER + week_idx
@@ -145,60 +100,34 @@ class BeingEngine:
         logs.append(self._compose_battle_report(battle_subjects))
         self._update_week_ranks()
         quiz_data = self._resolve_week_quiz(is_exam_week, battle_subjects, curriculum.subjects)
+        self._append_simulation_log(
+            week_idx=week_idx,
+            abs_week=abs_week,
+            battle_type=battle_type,
+            battle_subjects=battle_subjects,
+            logs=logs,
+            quiz_data=quiz_data,
+        )
 
         return logs, battle_type, quiz_data
 
     def calculate_rankings(self) -> None:
-        def total_score(student: Person) -> int:
-            return sum(student.get_exam_score(subject) for subject in CORE_SUBJECTS)
-
-        self.students.sort(key=total_score, reverse=True)
-        self.rankings = self.students
+        self.queries.calculate_rankings()
 
     def get_rankings(self) -> List[Person]:
-        if not self.rankings:
-            self.calculate_rankings()
-        return self.rankings
+        return self.queries.get_rankings()
 
     def build_mc_report(self) -> MCReportDTO:
-        rank_map = self._build_rank_map(self.get_rankings())
-        if self.protagonist.name not in rank_map:
-            raise RuntimeError(f"Protagonist not found in rankings: {self.protagonist.name}")
-        latest_skill = self.protagonist.skills[-1].name if self.protagonist.skills else None
-        return MCReportDTO(rank=rank_map[self.protagonist.name], latest_skill=latest_skill, stress=self.protagonist.stress)
+        return self.queries.build_mc_report()
 
     def build_student_detail(self, name: str) -> StudentDetailDTO:
-        student = next((s for s in self.students if s.name == name), None)
-        if student is None:
-            raise ValueError(f"Student not found: {name}")
-
-        total_mastery = int(sum(student.mastery.values()))
-        skills = [skill.name for skill in student.skills]
-        return StudentDetailDTO(
-            name=student.name,
-            is_male=student.is_male,
-            soul_desc=student.get_soul_desc(),
-            last_week_rank=student.last_week_rank,
-            total_mastery=total_mastery,
-            skills=skills,
-        )
+        return self.queries.build_student_detail(name)
 
     def build_person_profile(self, person: Person) -> PersonProfile:
-        return person.to_profile()
+        return self.queries.build_person_profile(person)
 
     def build_quiz_prompt_payload(self, quiz_result: QuizContent | None) -> str | None:
-        if quiz_result is None:
-            return None
-        if quiz_result.kind == "direct":
-            if quiz_result.content is None:
-                raise ValueError("Direct quiz content is missing")
-            return quiz_result.content
-        if quiz_result.subject is None or quiz_result.topic is None:
-            raise ValueError("Fallback quiz content requires subject and topic")
-        return f"[AI_GENERATED] {quiz_result.subject} - {quiz_result.topic}"
-
-    def _build_rank_map(self, rankings: Sequence[Person]) -> dict[str, int]:
-        return {student.name: idx + 1 for idx, student in enumerate(rankings)}
+        return self.queries.build_quiz_prompt_payload(quiz_result)
 
     def _resolve_battle_context(self, is_exam_week: bool) -> tuple[str, List[str]]:
         if is_exam_week:
@@ -299,7 +228,7 @@ class BeingEngine:
         return render_battle_report(dto)
 
     def _update_week_ranks(self) -> None:
-        rank_map = self._build_rank_map(self.rankings)
+        rank_map = self.queries.build_rank_map(self.rankings)
         for student in self.students:
             if student.name not in rank_map:
                 raise RuntimeError(f"Ranking missing student: {student.name}")
@@ -317,70 +246,41 @@ class BeingEngine:
         topic = curriculum_subjects[subject]
         return QuizDatabase.get_quiz(subject, topic)
 
-    def _build_profile(
+    def create_person(self, profile: PersonProfile) -> Person:
+        return self.initializer.create_person(profile)
+
+    def _append_simulation_log(
         self,
         *,
-        name: str,
-        role: RoleType,
-        tags: List[str],
-        is_male: bool,
-        is_elite: bool = False,
-        traits: List[TraitType] | None = None,
-    ) -> PersonProfile:
-        family, quirk, flaw = self._sample_background()
-        return PersonProfile(
-            name=name,
-            is_male=is_male,
-            role=role,
-            tags=tags,
-            is_elite=is_elite,
-            traits=list(traits or []),
-            family=family,
-            quirk=quirk,
-            flaw=flaw,
-        )
-
-    def _build_protagonist_profile(self) -> PersonProfile:
-        return self._build_profile(
-            name=Config.PROTAGONIST_NAME,
-            role="protagonist",
-            tags=["做题家"],
-            is_male=True,
-            traits=[HARDCORE_TRAIT],
-        )
-
-    def _build_rival_profile(self) -> PersonProfile:
-        return self._build_profile(
-            name=Config.RIVAL_NAME,
-            role="classmate",
-            tags=["天赋怪", "卷王"],
-            is_male=True,
-            is_elite=True,
-            traits=[ELITE_TRAIT, HARDCORE_TRAIT],
-        )
-
-    def _build_classmate_profile(self, *, name: str, is_male: bool, archetype_name: str) -> PersonProfile:
-        is_elite = archetype_name in Config.ELITE_TAGS
-        traits: List[TraitType] = [ELITE_TRAIT] if is_elite else []
-        return self._build_profile(
-            name=name,
-            role="classmate",
-            tags=[archetype_name],
-            is_male=is_male,
-            is_elite=is_elite,
-            traits=traits,
-        )
-
-    def _build_teacher_profile(self, *, name: str, is_male: bool, subject: str) -> PersonProfile:
-        return self._build_profile(
-            name=name,
-            role="teacher",
-            tags=[subject],
-            is_male=is_male,
-        )
-
-    def create_person(self, profile: PersonProfile) -> Person:
-        return Person.from_profile(profile)
-
-    def _sample_background(self) -> tuple[str, str, str]:
-        return NPCData.get_family(), NPCData.get_quirk(), NPCData.get_flaw()
+        week_idx: int,
+        abs_week: int,
+        battle_type: str,
+        battle_subjects: Sequence[str],
+        logs: Sequence[str],
+        quiz_data: QuizContent | None,
+    ) -> None:
+        quiz_payload = quiz_data.model_dump(mode="json") if quiz_data is not None else None
+        rank_map = self.queries.build_rank_map(self.rankings)
+        record = {
+            "ts": time.strftime("%Y-%m-%d %H:%M:%S"),
+            "source": self.simulation_source,
+            "year": self.year,
+            "semester": self.semester,
+            "week": week_idx,
+            "abs_week": abs_week,
+            "battle_type": battle_type,
+            "battle_subjects": list(battle_subjects),
+            "quiz": quiz_payload,
+            "logs": list(logs),
+            "protagonist": {
+                "name": self.protagonist.name,
+                "rank": rank_map.get(self.protagonist.name),
+                "stress": self.protagonist.stress,
+                "fatigue": self.protagonist.fatigue,
+                "focus_subjects": list(self.protagonist.focus_subjects),
+            },
+            "engine_state": self.to_state().model_dump(mode="json"),
+        }
+        with open(self.simulation_log_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(record, ensure_ascii=False, indent=2))
+            f.write("\n")

@@ -6,6 +6,7 @@ import json
 import os
 import sys
 import time
+from typing import Tuple
 
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
@@ -23,9 +24,25 @@ WORLD_SETTINGS_FILE = Config.PATHS["WORLD_SETTINGS"]
 WEEKLY_SCRIPT_FILE = Config.PATHS["WEEKLY_SCRIPT"]
 
 
+def parse_chapter_range(value: str) -> Tuple[int, int]:
+    if "-" not in value:
+        raise argparse.ArgumentTypeError("chapter range format must be START-END, e.g. 3-8")
+    start_str, end_str = value.split("-", 1)
+    if not start_str.isdigit() or not end_str.isdigit():
+        raise argparse.ArgumentTypeError("chapter range START and END must be positive integers")
+    start = int(start_str)
+    end = int(end_str)
+    if start <= 0 or end <= 0:
+        raise argparse.ArgumentTypeError("chapter range values must be >= 1")
+    if start > end:
+        raise argparse.ArgumentTypeError("chapter range START must be <= END")
+    return start, end
+
+
 class NovelGenerator:
     def __init__(self) -> None:
         self.engine = BeingEngine()
+        self.engine.simulation_source = "novel_generation"
         self.total_chars: int = 0
         self.chapter_count: int = 1
         self.year: int = 1
@@ -122,35 +139,69 @@ class NovelGenerator:
         self._advance_calendar()
         self.save_state()
 
+    def _run_single_chapter(self) -> None:
+        date_key = f"G{self.year}S{self.semester}_W{self.week:02d}"
+        _logs, battle_type, quiz_result = self.engine.tick(self.week)
+        mc_detail_dto = self.engine.build_student_detail(self.engine.protagonist.name)
+        mc_detail_text = render_student_detail(mc_detail_dto)
+        quiz_text = self.engine.build_quiz_prompt_payload(quiz_result)
+        prompt = self._build_prompt(date_key, battle_type, mc_detail_text, quiz_text)
+        system_instruction = self._build_system_instruction()
+
+        print(f"[{time.strftime('%H:%M:%S')}] Forging: {date_key}...", end="", flush=True)
+        content = writer.generate_scene(
+            prompt,
+            Config.MAIN_SCENE_STATS_CONTEXT,
+            system_instruction=system_instruction,
+            min_length=Config.CHAPTER_MIN_LENGTH,
+            max_length=2000,
+        )
+        self._write_chapter(date_key, content)
+        print(f" Done ({len(content)} chars)")
+
     def run(self) -> None:
         while self.year <= Config.SCHOOL_YEARS:
-            date_key = f"G{self.year}S{self.semester}_W{self.week:02d}"
-            _logs, battle_type, quiz_result = self.engine.tick(self.week)
-            mc_detail_dto = self.engine.build_student_detail(self.engine.protagonist.name)
-            mc_detail_text = render_student_detail(mc_detail_dto)
-            quiz_text = self.engine.build_quiz_prompt_payload(quiz_result)
-            prompt = self._build_prompt(date_key, battle_type, mc_detail_text, quiz_text)
-            system_instruction = self._build_system_instruction()
+            self._run_single_chapter()
 
-            print(f"[{time.strftime('%H:%M:%S')}] Forging: {date_key}...", end="", flush=True)
-            content = writer.generate_scene(
-                prompt,
-                Config.MAIN_SCENE_STATS_CONTEXT,
-                system_instruction=system_instruction,
-                min_length=Config.CHAPTER_MIN_LENGTH,
-                max_length=2000,
+    def run_chapter_range(self, start_chapter: int, end_chapter: int) -> None:
+        if start_chapter <= 0 or end_chapter <= 0:
+            raise ValueError("chapter index must be >= 1")
+        if start_chapter > end_chapter:
+            raise ValueError("start_chapter must be <= end_chapter")
+        if self.chapter_count != start_chapter:
+            raise ValueError(
+                f"Current chapter_count is {self.chapter_count}, but requested range starts at {start_chapter}. "
+                "Please align save_state.json with the range start."
             )
-            self._write_chapter(date_key, content)
-            print(f" Done ({len(content)} chars)")
+
+        while self.year <= Config.SCHOOL_YEARS and self.chapter_count <= end_chapter:
+            self._run_single_chapter()
+
+        if self.chapter_count <= end_chapter:
+            raise RuntimeError(
+                f"Reached timeline end before chapter {end_chapter}. Current chapter_count={self.chapter_count}."
+            )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="天道自动写作大阵 - 核心推进器")
     parser.add_argument("--debug", action="store_true", help="开启调试模式，输出完整 AI 提示词")
+    parser.add_argument("--chapter", type=int, help="只写指定章节（例如: --chapter 6）")
+    parser.add_argument("--chapter-range", type=parse_chapter_range, help="只写指定章节范围（例如: --chapter-range 6-10）")
     args = parser.parse_args()
 
     if args.debug:
         writer.debug = True
         print(" [SYSTEM] 已开启调试模式，将输出完整 AI 提示词。")
 
-    NovelGenerator().run()
+    if args.chapter is not None and args.chapter_range is not None:
+        raise ValueError("--chapter and --chapter-range are mutually exclusive")
+
+    generator = NovelGenerator()
+    if args.chapter is not None:
+        generator.run_chapter_range(args.chapter, args.chapter)
+    elif args.chapter_range is not None:
+        start, end = args.chapter_range
+        generator.run_chapter_range(start, end)
+    else:
+        generator.run()

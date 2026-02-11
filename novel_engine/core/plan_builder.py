@@ -40,6 +40,7 @@ class PlanBuilder:
         self.quiz_generator = quiz_generator
 
     def build(self, engine: BeingEngine) -> tuple[WorldSettings, WeeklyScript]:
+        engine.simulation_source = "plan_builder"
         world_settings = self._build_world_settings_template(engine)
         weekly_script = self._build_weekly_script_template()
 

@@ -34,6 +34,10 @@ quiz_gen_final.log
 
 # Project specific
 save_state.json
+plot_summary.txt
+world_settings.json
+weekly_script.json
+simulation_trace.jsonl
 generated_novel.txt
 novel_chapters/
 archive/
