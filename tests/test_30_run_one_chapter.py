@@ -10,7 +10,6 @@ from helpers import run_cmd
 from novel_engine.core.contracts import RuntimeState
 
 
-
 def test_run_one_chapter_in_isolated_workspace(isolated_workspace: Path, repo_root: Path) -> None:
     load_dotenv(dotenv_path=repo_root / ".env", override=False)
     env = dict(os.environ)
@@ -21,10 +20,19 @@ def test_run_one_chapter_in_isolated_workspace(isolated_workspace: Path, repo_ro
         env["BASE_URL"] = env["GLM_BASE_URL"]
     env.setdefault("BASE_URL", "https://open.bigmodel.cn/api/paas/v4/")
 
+    if not (isolated_workspace / "world_settings.json").exists() or not (isolated_workspace / "weekly_script.json").exists():
+        prep_cmd = ["uv", "run", "python", "generate_full_plan.py"]
+        prep_res = run_cmd(prep_cmd, cwd=isolated_workspace, timeout=300, env=env)
+        assert prep_res.returncode == 0, (
+            "CHAPTER_GENERATION_FAILED(prep_plan)\n"
+            f"cmd={' '.join(prep_cmd)}\n"
+            f"stdout={prep_res.stdout}\n"
+            f"stderr={prep_res.stderr}"
+        )
+
     cmd = ["timeout", "240s", "uv", "run", "python", "main.py"]
     res = run_cmd(cmd, cwd=isolated_workspace, timeout=260, env=env)
 
-    # main.py is loop-based; timeout 124 is acceptable if one chapter already landed.
     assert res.returncode in (0, 124), (
         "CHAPTER_GENERATION_FAILED(process_exit)\n"
         f"cmd={' '.join(cmd)}\n"
@@ -41,6 +49,8 @@ def test_run_one_chapter_in_isolated_workspace(isolated_workspace: Path, repo_ro
         state = json.loads(save_state.read_text(encoding="utf-8"))
         validated_state = RuntimeState.model_validate(state)
         save_ok = validated_state.chapter_count >= 2
+        if validated_state.engine_state.students:
+            assert all(skill.name for skill in validated_state.engine_state.students[0].skills)
 
     assert chapter_ok or save_ok, (
         "CHAPTER_GENERATION_FAILED(output_validation)\n"

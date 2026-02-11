@@ -5,7 +5,6 @@ import pytest
 from novel_engine.core.contracts import RuntimeState, WeeklyScript, WorldSettings
 
 
-
 def test_world_settings_rejects_string_tags() -> None:
     payload = {
         "meta": {
@@ -23,8 +22,13 @@ def test_world_settings_rejects_string_tags() -> None:
             {
                 "name": "叶凌天",
                 "gender": "男",
-                "background": "[普通工薪, 拖延症, 喜欢转笔]",
+                "role": "protagonist",
+                "is_elite": False,
+                "traits": [],
                 "tags": "['做题家']",
+                "family": "普通工薪",
+                "flaw": "拖延症",
+                "quirk": "转笔",
             }
         ],
     }
@@ -33,10 +37,9 @@ def test_world_settings_rejects_string_tags() -> None:
         WorldSettings.model_validate(payload)
 
 
-
 def test_weekly_script_rejects_invalid_week_key() -> None:
     payload = {
-        "meta": {"title": "x"},
+        "meta": {"title": "x", "generated_at": "x", "description": "x"},
         "weeks": {
             "week-1": {
                 "event": "e",
@@ -50,7 +53,6 @@ def test_weekly_script_rejects_invalid_week_key() -> None:
 
     with pytest.raises(Exception):
         WeeklyScript.model_validate(payload)
-
 
 
 def test_runtime_state_rejects_missing_engine_state() -> None:

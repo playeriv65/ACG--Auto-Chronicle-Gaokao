@@ -12,4 +12,5 @@ def render_student_detail(dto: StudentDetailDTO) -> str:
 
 
 def render_mc_report(dto: MCReportDTO) -> str:
-    return f"排名:{dto.rank} | 技能:{dto.skill} | 压力:{dto.stress}"
+    rendered_skill = dto.latest_skill or "无"
+    return f"排名:{dto.rank} | 技能:{rendered_skill} | 压力:{dto.stress}"

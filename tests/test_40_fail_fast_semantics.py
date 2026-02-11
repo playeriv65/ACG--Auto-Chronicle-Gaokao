@@ -6,10 +6,9 @@ import pytest
 
 from novel_engine.core import ai_writer
 from novel_engine.core.being_engine import BeingEngine
-from novel_engine.core.contracts import WorldSettings
+from novel_engine.core.contracts import ChatMessage, ChatRequest, WorldSettings
 from novel_engine.core.engine_io import get_curriculum_from_db
 from helpers import prepare_isolated_workspace, run_cmd
-
 
 
 def test_main_fails_on_bad_world_settings(tmp_path: Path, repo_root: Path) -> None:
@@ -21,7 +20,6 @@ def test_main_fails_on_bad_world_settings(tmp_path: Path, repo_root: Path) -> No
     assert res.returncode != 0, "main.py should fail fast on invalid world_settings.json"
 
 
-
 def test_engine_io_raises_on_missing_or_empty_curriculum() -> None:
     with pytest.raises(FileNotFoundError):
         get_curriculum_from_db("/tmp/definitely-not-exists.db", 1)
@@ -30,8 +28,7 @@ def test_engine_io_raises_on_missing_or_empty_curriculum() -> None:
         get_curriculum_from_db("novel_engine/data/storage/course_data.db", 99999)
 
 
-
-def test_init_from_settings_rejects_non_json_tags() -> None:
+def test_init_from_settings_rejects_invalid_role() -> None:
     engine = BeingEngine()
     bad_settings = {
         "meta": {
@@ -49,16 +46,20 @@ def test_init_from_settings_rejects_non_json_tags() -> None:
             {
                 "name": "叶凌天",
                 "gender": "男",
-                "background": "[普通工薪, 拖延症, 喜欢转笔]",
-                "tags": "['做题家']",
+                "role": "invalid-role",
+                "is_elite": False,
+                "traits": [],
+                "tags": ["做题家"],
+                "family": "普通工薪",
+                "flaw": "拖延症",
+                "quirk": "转笔",
             }
-        ]
+        ],
     }
 
     with pytest.raises(Exception):
         settings = WorldSettings.model_validate(bad_settings)
         engine.init_from_settings(settings)
-
 
 
 def test_ai_writer_call_api_raises_without_retry(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -83,6 +84,8 @@ def test_ai_writer_call_api_raises_without_retry(monkeypatch: pytest.MonkeyPatch
     monkeypatch.setattr(writer, "client", fake_client)
 
     with pytest.raises(RuntimeError, match="boom"):
-        writer._call_api([{"role": "user", "content": "x"}])
+        writer._call_api(
+            ChatRequest(messages=[ChatMessage(role="user", content="x")], max_tokens=32)
+        )
 
     assert fake_client.chat.completions.calls == 1

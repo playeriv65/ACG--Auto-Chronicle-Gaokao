@@ -8,13 +8,6 @@ from typing import Any, ClassVar, Sequence
 from novel_engine.core.contracts import StrictModel
 
 DB_PATH = "novel_engine/data/storage/world_data.db"
-_DEFAULT_NAMES: tuple[str, ...] = ("李", "王", "张")
-_DEFAULT_WEIGHTS: tuple[int, ...] = (1, 1, 1)
-_DEFAULT_FALLBACKS: dict[str, Sequence[str]] = {
-    "families": ("普通工薪",),
-    "quirks": ("转笔",),
-    "flaws": ("拖延症",),
-}
 
 
 class Subject:
@@ -78,7 +71,7 @@ class SkillTree:
             cursor.execute("SELECT name, level, description FROM skills WHERE subject = ? ORDER BY level", (subject,))
             rows = cursor.fetchall()
             if not rows:
-                return SkillRecord(name="基础知识", level=1, description="平平无奇")
+                raise ValueError(f"No skills found for subject: {subject}")
 
             skills = [SkillRecord(name=r[0], level=int(r[1]), description=r[2]) for r in rows]
             idx = min(len(skills) - 1, max(0, int(mastery_val // 1000) - 1))
@@ -95,7 +88,7 @@ def get_random_event(season: str = "ANY") -> EventRecord:
         cursor.execute("SELECT description, effect FROM events WHERE season = 'ANY' OR season = ?", (season,))
         rows = cursor.fetchall()
         if not rows:
-            return EventRecord(description="发呆", effect="")
+            raise ValueError(f"No events found for season: {season}")
         chosen = random.choice(rows)
         return EventRecord(description=chosen[0], effect=chosen[1])
     finally:
@@ -126,11 +119,9 @@ class NPCData:
     def get_name(cls, gender: str = "M", era: str = "00s") -> str:
         if cls._SURNAMES_CACHE is None:
             rows = cls._fetch_all("SELECT name, frequency FROM surnames")
-            if rows:
-                cls._SURNAMES_CACHE, cls._SURNAMES_WEIGHTS_CACHE = zip(*rows)
-            else:
-                cls._SURNAMES_CACHE = _DEFAULT_NAMES
-                cls._SURNAMES_WEIGHTS_CACHE = _DEFAULT_WEIGHTS
+            if not rows:
+                raise ValueError("No surnames found in DB")
+            cls._SURNAMES_CACHE, cls._SURNAMES_WEIGHTS_CACHE = zip(*rows)
 
         surname = random.choices(cls._SURNAMES_CACHE, weights=cls._SURNAMES_WEIGHTS_CACHE, k=1)[0]
 
@@ -140,10 +131,7 @@ class NPCData:
             cursor.execute("SELECT name FROM given_names WHERE gender = ? AND era = ? ORDER BY RANDOM() LIMIT 1", (gender, era))
             res = cursor.fetchone()
             if not res:
-                cursor.execute("SELECT name FROM given_names WHERE gender = ? ORDER BY RANDOM() LIMIT 1", (gender,))
-                res = cursor.fetchone()
-            if not res:
-                return surname + ("强" if gender == "M" else "珍")
+                raise ValueError(f"No given_names found for gender={gender} era={era}")
             return surname + res[0]
         finally:
             conn.close()
@@ -152,21 +140,25 @@ class NPCData:
     def get_archetype(cls) -> ArchetypeRecord:
         if cls._ARCHETYPES_CACHE is None:
             rows = cls._fetch_all("SELECT name, title, base_stats FROM archetypes")
+            if not rows:
+                raise ValueError("No archetypes found in DB")
             cls._ARCHETYPES_CACHE = [
                 ArchetypeRecord(name=r[0], title=r[1], base_stats=json.loads(r[2]))
                 for r in rows
             ]
         if not cls._ARCHETYPES_CACHE:
-            return ArchetypeRecord(name="透明人", title="凡人", base_stats={"stress": 40})
+            raise ValueError("Archetypes cache is empty")
         return random.choice(cls._ARCHETYPES_CACHE)
 
     @classmethod
     def get_teacher_profile(cls) -> TeacherProfileRecord:
         if cls._TEACHER_PROFILES_CACHE is None:
             rows = cls._fetch_all("SELECT subject, catchphrase FROM teacher_profiles")
+            if not rows:
+                raise ValueError("No teacher_profiles found in DB")
             cls._TEACHER_PROFILES_CACHE = [TeacherProfileRecord(subject=r[0], catchphrase=r[1]) for r in rows]
         if not cls._TEACHER_PROFILES_CACHE:
-            return TeacherProfileRecord(subject="数学", catchphrase="口头禅：送分题")
+            raise ValueError("Teacher profiles cache is empty")
         return random.choice(cls._TEACHER_PROFILES_CACHE)
 
     @classmethod
@@ -174,7 +166,7 @@ class NPCData:
         if cls._FAMILIES_CACHE is None:
             cls._FAMILIES_CACHE = [r[0] for r in cls._fetch_all("SELECT name FROM families")]
         if not cls._FAMILIES_CACHE:
-            return random.choice(_DEFAULT_FALLBACKS["families"])
+            raise ValueError("No families found in DB")
         return random.choice(cls._FAMILIES_CACHE)
 
     @classmethod
@@ -182,7 +174,7 @@ class NPCData:
         if cls._QUIRKS_CACHE is None:
             cls._QUIRKS_CACHE = [r[0] for r in cls._fetch_all("SELECT name FROM quirks")]
         if not cls._QUIRKS_CACHE:
-            return random.choice(_DEFAULT_FALLBACKS["quirks"])
+            raise ValueError("No quirks found in DB")
         return random.choice(cls._QUIRKS_CACHE)
 
     @classmethod
@@ -190,35 +182,45 @@ class NPCData:
         if cls._FLAWS_CACHE is None:
             cls._FLAWS_CACHE = [r[0] for r in cls._fetch_all("SELECT name FROM flaws")]
         if not cls._FLAWS_CACHE:
-            return random.choice(_DEFAULT_FALLBACKS["flaws"])
+            raise ValueError("No flaws found in DB")
         return random.choice(cls._FLAWS_CACHE)
 
     @classproperty
     def ARCHETYPES(cls) -> list[ArchetypeRecord]:
         if cls._ARCHETYPES_CACHE is None:
             cls.get_archetype()
-        return cls._ARCHETYPES_CACHE or [ArchetypeRecord(name="透明人", title="凡人", base_stats={"stress": 40})]
+        if not cls._ARCHETYPES_CACHE:
+            raise ValueError("Archetypes cache is empty")
+        return cls._ARCHETYPES_CACHE
 
     @classproperty
     def TEACHER_PROFILES(cls) -> list[TeacherProfileRecord]:
         if cls._TEACHER_PROFILES_CACHE is None:
             cls.get_teacher_profile()
-        return cls._TEACHER_PROFILES_CACHE or [TeacherProfileRecord(subject="数学", catchphrase="口头禅：送分题")]
+        if not cls._TEACHER_PROFILES_CACHE:
+            raise ValueError("Teacher profiles cache is empty")
+        return cls._TEACHER_PROFILES_CACHE
 
     @classproperty
     def FAMILIES(cls) -> list[str]:
         if cls._FAMILIES_CACHE is None:
             cls.get_family()
-        return cls._FAMILIES_CACHE or list(_DEFAULT_FALLBACKS["families"])
+        if not cls._FAMILIES_CACHE:
+            raise ValueError("Families cache is empty")
+        return cls._FAMILIES_CACHE
 
     @classproperty
     def QUIRKS(cls) -> list[str]:
         if cls._QUIRKS_CACHE is None:
             cls.get_quirk()
-        return cls._QUIRKS_CACHE or list(_DEFAULT_FALLBACKS["quirks"])
+        if not cls._QUIRKS_CACHE:
+            raise ValueError("Quirks cache is empty")
+        return cls._QUIRKS_CACHE
 
     @classproperty
     def FLAWS(cls) -> list[str]:
         if cls._FLAWS_CACHE is None:
             cls.get_flaw()
-        return cls._FLAWS_CACHE or list(_DEFAULT_FALLBACKS["flaws"])
+        if not cls._FLAWS_CACHE:
+            raise ValueError("Flaws cache is empty")
+        return cls._FLAWS_CACHE

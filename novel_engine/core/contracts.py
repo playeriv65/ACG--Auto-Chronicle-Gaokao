@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Literal
+from typing import Dict, List, Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -10,11 +10,25 @@ class StrictModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+TraitType = Literal["elite", "info_track", "hardcore"]
+
+
+class SkillState(StrictModel):
+    name: str
+    level: int
+    description: str
+
+
 class CharacterProfile(StrictModel):
     name: str
     gender: Literal["男", "女"] | str
-    background: str
+    role: Literal["protagonist", "classmate", "teacher"]
+    is_elite: bool
+    traits: List[TraitType]
     tags: List[str]
+    family: str
+    flaw: str
+    quirk: str
 
 
 class SystemPrompt(StrictModel):
@@ -72,10 +86,33 @@ class CurriculumWeek(StrictModel):
     subjects: Dict[str, str]
 
 
+class ChatMessage(StrictModel):
+    role: Literal["system", "user", "assistant"]
+    content: str
+
+
+class ChatRequest(StrictModel):
+    messages: List[ChatMessage]
+    max_tokens: int
+
+
+class ChatResponse(StrictModel):
+    content: str
+
+
+class QuizContent(StrictModel):
+    kind: Literal["direct", "fallback"]
+    subject: str | None = None
+    topic: str | None = None
+    content: str | None = None
+
+
 class PersonState(StrictModel):
     name: str
     role: str
     tags: List[str]
+    traits: List[TraitType]
+    is_elite: bool
     gender: str
     family: str
     quirk: str
@@ -83,7 +120,7 @@ class PersonState(StrictModel):
     talent: Dict[str, int]
     mastery: Dict[str, float]
     last_mastery: Dict[str, float]
-    skills: List[tuple[str, int, str]]
+    skills: List[SkillState]
     mood: int
     stress: int
     fatigue: int

@@ -10,6 +10,7 @@ from typing import List, Protocol
 from config import Config
 from novel_engine.core.being_engine import BeingEngine
 from novel_engine.core.contracts import (
+    QuizContent,
     SystemPrompt,
     WeeklyEntry,
     WeeklyRankings,
@@ -19,7 +20,6 @@ from novel_engine.core.contracts import (
     WorldSettingsMeta,
 )
 from novel_engine.core.presenters import render_mc_report
-from novel_engine.data.quiz_data import AIQuizFallbackModel, QuizResult
 
 KEY_LOG_PREFIXES = ("【突发】", "【战报】", "【道心抉择】", "【突破】")
 INFO_TRACK_EVENT_TEXT = "开启信奥"
@@ -50,18 +50,8 @@ class PlanBuilder:
                 print(f" -> 正在推演: 高{year}{'上' if semester == 1 else '下'}...")
 
                 for week in range(1, Config.WEEKS_PER_SEMESTER + 1):
-                    logs, battle_type, quiz_raw = engine.tick(week)
-                    abs_week = (year - 1) * Config.WEEKS_PER_YEAR + (semester - 1) * Config.WEEKS_PER_SEMESTER + week
-                    quiz_final = self._resolve_quiz_content(abs_week, week, quiz_raw)
-                    date_key = f"G{year}S{semester}_W{week:02d}"
-
-                    weekly_script.weeks[date_key] = self._build_week_data(
-                        engine=engine,
-                        battle_type=battle_type,
-                        logs=logs,
-                        quiz_final=quiz_final,
-                        abs_week=abs_week,
-                    )
+                    date_key, entry = self._build_week_entry(engine, year, semester, week)
+                    weekly_script.weeks[date_key] = entry
 
         return world_settings, weekly_script
 
@@ -75,17 +65,7 @@ class PlanBuilder:
             raise ValueError(f"Missing curriculum date for abs_week={abs_week}")
         return str(row[0])
 
-    def _get_cached_quiz(self, week: int, subject: str, topic: str) -> str | None:
-        with sqlite3.connect(self.quiz_db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute(
-                "SELECT content FROM quiz WHERE week=? AND subject=? AND topic=?",
-                (week, subject, topic),
-            )
-            row = cursor.fetchone()
-        return str(row[0]) if row and row[0] else None
-
-    def _save_quiz_to_cache(self, week: int, subject: str, topic: str, content: str) -> None:
+    def _upsert_or_read_quiz_cache(self, week: int, subject: str, topic: str, content: str | None = None) -> str | None:
         with sqlite3.connect(self.quiz_db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
@@ -93,11 +73,20 @@ class PlanBuilder:
                 "(id INTEGER PRIMARY KEY AUTOINCREMENT, week INTEGER, subject TEXT, topic TEXT, content TEXT, "
                 "UNIQUE(week, subject, topic))"
             )
+            if content is None:
+                cursor.execute(
+                    "SELECT content FROM quiz WHERE week=? AND subject=? AND topic=?",
+                    (week, subject, topic),
+                )
+                row = cursor.fetchone()
+                return str(row[0]) if row and row[0] else None
+
             cursor.execute(
                 "INSERT OR REPLACE INTO quiz (week, subject, topic, content) VALUES (?, ?, ?, ?)",
                 (week, subject, topic, content),
             )
             conn.commit()
+            return content
 
     def _extract_key_details(self, logs: List[str]) -> List[str]:
         details: List[str] = []
@@ -132,14 +121,19 @@ class PlanBuilder:
             weeks={},
         )
 
-    def _resolve_quiz_content(self, abs_week: int, week: int, quiz_raw: QuizResult | None) -> str | None:
+    def _resolve_quiz_content(self, abs_week: int, week: int, quiz_raw: QuizContent | None) -> str | None:
         if quiz_raw is None:
             return None
 
-        if not isinstance(quiz_raw, AIQuizFallbackModel):
+        if quiz_raw.kind == "direct":
+            if quiz_raw.content is None:
+                raise RuntimeError("Direct quiz content is missing")
             return quiz_raw.content
 
-        cached = self._get_cached_quiz(abs_week, quiz_raw.subject, quiz_raw.topic)
+        if quiz_raw.subject is None or quiz_raw.topic is None:
+            raise RuntimeError("Fallback quiz must include subject and topic")
+
+        cached = self._upsert_or_read_quiz_cache(abs_week, quiz_raw.subject, quiz_raw.topic)
         if cached:
             return cached
 
@@ -149,8 +143,27 @@ class PlanBuilder:
             raise RuntimeError(
                 f"Quiz generation failed for week={week} subject={quiz_raw.subject} topic={quiz_raw.topic}"
             )
-        self._save_quiz_to_cache(abs_week, quiz_raw.subject, quiz_raw.topic, generated)
-        return generated
+        return self._upsert_or_read_quiz_cache(abs_week, quiz_raw.subject, quiz_raw.topic, generated)
+
+    def _build_week_entry(
+        self,
+        engine: BeingEngine,
+        year: int,
+        semester: int,
+        week: int,
+    ) -> tuple[str, WeeklyEntry]:
+        logs, battle_type, quiz_raw = engine.tick(week)
+        abs_week = (year - 1) * Config.WEEKS_PER_YEAR + (semester - 1) * Config.WEEKS_PER_SEMESTER + week
+        quiz_final = self._resolve_quiz_content(abs_week, week, quiz_raw)
+        date_key = f"G{year}S{semester}_W{week:02d}"
+        entry = self._build_week_data(
+            engine=engine,
+            battle_type=battle_type,
+            logs=logs,
+            quiz_final=quiz_final,
+            abs_week=abs_week,
+        )
+        return date_key, entry
 
     def _build_week_data(
         self,
@@ -161,7 +174,9 @@ class PlanBuilder:
         abs_week: int,
     ) -> WeeklyEntry:
         rankings = engine.get_rankings()
-        top_student = rankings[0].name if rankings else ""
+        if not rankings:
+            raise RuntimeError("rankings is empty when building weekly data")
+        top_student = rankings[0].name
         return WeeklyEntry(
             event=battle_type,
             date=self._get_week_date_from_db(abs_week),

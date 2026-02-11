@@ -38,3 +38,6 @@ generated_novel.txt
 novel_chapters/
 archive/
 .DS_Store
+
+# Local test artifacts
+test_reports/

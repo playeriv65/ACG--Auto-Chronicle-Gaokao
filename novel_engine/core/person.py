@@ -4,43 +4,57 @@ from __future__ import annotations
 
 import math
 import random
-from typing import Dict, List, Sequence, Tuple
+from typing import Dict, List, Sequence
 
 from config import Config
-from novel_engine.core.contracts import PersonState
-from novel_engine.core.engine_constants import ALL_SUBJECTS_MARKER, INFO_TRACK_TAG, PROTAGONIST_ROLE
-from novel_engine.data.database import NPCData, Subject
-
-Skill = Tuple[str, int, str]
+from novel_engine.core.contracts import PersonState, SkillState, TraitType
+from novel_engine.core.engine_constants import ALL_SUBJECTS_MARKER, PROTAGONIST_ROLE
+from novel_engine.data.database import Subject
 
 
 class Person:
     """Represents one actor (student or teacher) in the world state."""
 
-    def __init__(self, name: str, role: str, tags: List[str], gender: str = "男"):
+    def __init__(
+        self,
+        name: str,
+        role: str,
+        tags: List[str],
+        gender: str,
+        *,
+        is_elite: bool,
+        family: str,
+        quirk: str,
+        flaw: str,
+        traits: List[TraitType] | None = None,
+    ):
         self.name: str = name
         self.role: str = role
         self.tags: List[str] = tags
         self.gender: str = gender
+        self.is_elite: bool = is_elite
+        self.traits: List[TraitType] = list(traits or [])
 
-        self.family: str = NPCData.get_family()
-        self.quirk: str = NPCData.get_quirk()
-        self.flaw: str = NPCData.get_flaw()
+        self.family: str = family
+        self.quirk: str = quirk
+        self.flaw: str = flaw
 
         if role == PROTAGONIST_ROLE:
             self.talent = self._build_protagonist_talent()
             self.mastery = self._build_protagonist_mastery()
         else:
-            self.talent = self._build_student_talent(tags)
-            self.mastery = self._build_student_mastery(tags)
+            self.talent = self._build_student_talent()
+            self.mastery = self._build_student_mastery()
 
         self.last_mastery: Dict[str, float] = self.mastery.copy()
-        self.skills: List[Skill] = []
+        self.skills: List[SkillState] = []
         self.mood: int = Config.DEFAULT_MOOD
         self.stress: int = Config.DEFAULT_STRESS
         self.fatigue: int = Config.DEFAULT_FATIGUE
         self.focus_subjects: List[str] = []
         self.last_week_rank: int = Config.DEFAULT_LAST_WEEK_RANK
+
+    INFO_TRACK_TRAIT: TraitType = "info_track"
 
     def _build_protagonist_talent(self) -> Dict[str, int]:
         talent = {subject: Config.PROTAGONIST_BASE_TALENT for subject in Subject.ALL}
@@ -55,16 +69,14 @@ class Person:
         mastery[Subject.INFO] = Config.PROTAGONIST_INFO_MASTERY
         return mastery
 
-    def _build_student_talent(self, tags: Sequence[str]) -> Dict[str, int]:
-        is_elite = any(tag in Config.ELITE_TAGS for tag in tags)
-        talent_min = Config.ELITE_TALENT_MIN if is_elite else Config.NORMAL_TALENT_MIN
-        talent_max = Config.ELITE_TALENT_MAX if is_elite else Config.NORMAL_TALENT_MAX
+    def _build_student_talent(self) -> Dict[str, int]:
+        talent_min = Config.ELITE_TALENT_MIN if self.is_elite else Config.NORMAL_TALENT_MIN
+        talent_max = Config.ELITE_TALENT_MAX if self.is_elite else Config.NORMAL_TALENT_MAX
         return {subject: random.randint(talent_min, talent_max) for subject in Subject.ALL}
 
-    def _build_student_mastery(self, tags: Sequence[str]) -> Dict[str, float]:
-        is_elite = any(tag in Config.ELITE_TAGS for tag in tags)
-        mastery_min = Config.ELITE_MASTERY_MIN if is_elite else Config.NORMAL_MASTERY_MIN
-        mastery_max = Config.ELITE_MASTERY_MAX if is_elite else Config.NORMAL_MASTERY_MAX
+    def _build_student_mastery(self) -> Dict[str, float]:
+        mastery_min = Config.ELITE_MASTERY_MIN if self.is_elite else Config.NORMAL_MASTERY_MIN
+        mastery_max = Config.ELITE_MASTERY_MAX if self.is_elite else Config.NORMAL_MASTERY_MAX
         return {subject: float(random.randint(mastery_min, mastery_max)) for subject in Subject.ALL}
 
     def to_state(self) -> PersonState:
@@ -72,6 +84,8 @@ class Person:
             name=self.name,
             role=self.role,
             tags=self.tags,
+            traits=self.traits,
+            is_elite=self.is_elite,
             gender=self.gender,
             family=self.family,
             quirk=self.quirk,
@@ -87,16 +101,27 @@ class Person:
             last_week_rank=self.last_week_rank,
         )
 
+    def has_trait(self, trait: TraitType) -> bool:
+        """Business logic should branch on traits, not free-form tags."""
+        return trait in self.traits
+
     @staticmethod
     def from_state(state: PersonState) -> "Person":
-        person = Person(state.name, state.role, list(state.tags), state.gender)
-        person.family = state.family
-        person.quirk = state.quirk
-        person.flaw = state.flaw
+        person = Person(
+            state.name,
+            state.role,
+            list(state.tags),
+            state.gender,
+            is_elite=state.is_elite,
+            family=state.family,
+            quirk=state.quirk,
+            flaw=state.flaw,
+            traits=list(state.traits),
+        )
         person.talent = dict(state.talent)
         person.mastery = dict(state.mastery)
         person.last_mastery = dict(state.last_mastery)
-        person.skills = [(skill[0], skill[1], skill[2]) for skill in state.skills]
+        person.skills = list(state.skills)
         person.mood = state.mood
         person.stress = state.stress
         person.fatigue = state.fatigue
@@ -115,8 +140,8 @@ class Person:
         talent_mod = self.talent[subject] / 100.0
 
         skill_bonus = 0.0
-        for name, _lvl, _desc in self.skills:
-            if subject in name:
+        for skill in self.skills:
+            if subject in skill.name:
                 skill_bonus += Config.SKILL_SUBJECT_BONUS
 
         score = (base + skill_bonus) * talent_mod * (1.0 - penalty)
@@ -135,7 +160,7 @@ class Person:
         if is_exam_week:
             self.stress += Config.EXAM_STRESS_INCREMENT
 
-        if current_week > Config.INFO_OPTIONAL_START_WEEK and INFO_TRACK_TAG in self.tags and not is_exam_week:
+        if current_week > Config.INFO_OPTIONAL_START_WEEK and self.has_trait(self.INFO_TRACK_TRAIT) and not is_exam_week:
             if random.random() < Config.INFO_OPTIONAL_FOCUS_PROB:
                 self.focus_subjects = [Subject.INFO]
 
@@ -153,28 +178,21 @@ class Person:
 
         self.last_mastery = self.mastery.copy()
 
-        for subject in self.focus_subjects:
-            current = self.mastery[subject]
-            inhibition = 1.0 / (math.log10(current + 10.0) / 2.0)
-            growth = self.talent[subject] * Config.BASE_GROWTH_FACTOR * inhibition
-            if "卷王" in self.tags:
-                growth *= Config.ELITE_GROWTH_MULTIPLIER
-            if self.role == PROTAGONIST_ROLE and subject == Subject.INFO:
-                growth *= Config.INFO_GROWTH_MULTIPLIER
-            self.mastery[subject] = current + growth
-            self.fatigue += Config.FOCUS_FATIGUE_COST
-
+        focus_set = set(self.focus_subjects)
         for subject in Subject.ALL:
-            if subject in self.focus_subjects:
-                continue
             current = self.mastery[subject]
             inhibition = 1.0 / (math.log10(current + 10.0) / 2.0)
             growth = self.talent[subject] * Config.BASE_GROWTH_FACTOR * inhibition
-            if "卷王" in self.tags:
+            if self.is_elite:
                 growth *= Config.ELITE_GROWTH_MULTIPLIER
             if self.role == PROTAGONIST_ROLE and subject == Subject.INFO:
                 growth *= Config.INFO_GROWTH_MULTIPLIER
-            self.mastery[subject] = current + growth * Config.NON_FOCUS_GROWTH_MULTIPLIER
+
+            if subject in focus_set:
+                self.mastery[subject] = current + growth
+                self.fatigue += Config.FOCUS_FATIGUE_COST
+            else:
+                self.mastery[subject] = current + growth * Config.NON_FOCUS_GROWTH_MULTIPLIER
 
         if self.fatigue > Config.FATIGUE_BREAKDOWN_THRESHOLD:
             self.fatigue = Config.FATIGUE_RESET_AFTER_BREAKDOWN

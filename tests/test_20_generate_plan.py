@@ -9,7 +9,6 @@ from helpers import assert_json_shape, run_cmd
 from novel_engine.core.contracts import WeeklyScript, WorldSettings
 
 
-
 def test_generate_plan_in_isolated_workspace(isolated_workspace: Path, repo_root: Path) -> None:
     load_dotenv(dotenv_path=repo_root / ".env", override=False)
     env = dict(os.environ)
@@ -32,7 +31,11 @@ def test_generate_plan_in_isolated_workspace(isolated_workspace: Path, repo_root
     world_settings = assert_json_shape(isolated_workspace / "world_settings.json", ["meta", "characters"])
     assert isinstance(world_settings["characters"], list) and world_settings["characters"], "PLAN_GENERATION_FAILED: empty characters"
     validated_world = WorldSettings.model_validate(world_settings)
-    assert validated_world.characters and isinstance(validated_world.characters[0].tags, list), "PLAN_GENERATION_FAILED: tags must be list"
+    first_character = validated_world.characters[0]
+    assert first_character.role in {"protagonist", "classmate", "teacher"}
+    assert isinstance(first_character.is_elite, bool)
+    assert first_character.family and first_character.flaw and first_character.quirk
+    assert "background" not in world_settings["characters"][0], "PLAN_GENERATION_FAILED: background must be removed"
 
     weekly_script = assert_json_shape(isolated_workspace / "weekly_script.json", ["meta", "weeks"])
     assert isinstance(weekly_script["weeks"], dict) and weekly_script["weeks"], "PLAN_GENERATION_FAILED: empty weeks"

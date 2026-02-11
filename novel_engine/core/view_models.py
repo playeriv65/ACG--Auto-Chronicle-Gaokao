@@ -16,5 +16,5 @@ class StudentDetailDTO(StrictModel):
 
 class MCReportDTO(StrictModel):
     rank: int
-    skill: str
+    latest_skill: str | None
     stress: int

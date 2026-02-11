@@ -4,7 +4,6 @@ from novel_engine.core.presenters import render_mc_report, render_student_detail
 from novel_engine.core.view_models import MCReportDTO, StudentDetailDTO
 
 
-
 def test_render_student_detail_stable() -> None:
     dto = StudentDetailDTO(
         name="叶凌天",
@@ -21,8 +20,13 @@ def test_render_student_detail_stable() -> None:
     assert "洛必达法则 | 构造法" in text
 
 
-
 def test_render_mc_report_stable() -> None:
-    dto = MCReportDTO(rank=5, skill="构造法", stress=12)
+    dto = MCReportDTO(rank=5, latest_skill="构造法", stress=12)
     text = render_mc_report(dto)
     assert text == "排名:5 | 技能:构造法 | 压力:12"
+
+
+def test_render_mc_report_uses_presenter_default_for_empty_skill() -> None:
+    dto = MCReportDTO(rank=5, latest_skill=None, stress=12)
+    text = render_mc_report(dto)
+    assert text == "排名:5 | 技能:无 | 压力:12"

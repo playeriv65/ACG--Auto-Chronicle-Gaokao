@@ -3,31 +3,14 @@ from __future__ import annotations
 import os
 import sqlite3
 
-from pydantic import ConfigDict
-
-from novel_engine.core.contracts import StrictModel
+from novel_engine.core.contracts import QuizContent
 
 DB_PATH = "novel_engine/data/storage/course_data.db"
 
 
-class QuizContentModel(StrictModel):
-    type: str = "QUIZ_CONTENT"
-    content: str
-
-
-class AIQuizFallbackModel(StrictModel):
-    model_config = ConfigDict(extra="forbid")
-    type: str = "AI_GENERATED"
-    subject: str
-    topic: str
-
-
-QuizResult = QuizContentModel | AIQuizFallbackModel
-
-
 class QuizDatabase:
     @staticmethod
-    def get_quiz(subject: str, topic: str) -> QuizResult:
+    def get_quiz(subject: str, topic: str) -> QuizContent:
         if os.path.exists(DB_PATH):
             with sqlite3.connect(DB_PATH) as conn:
                 cursor = conn.cursor()
@@ -37,6 +20,6 @@ class QuizDatabase:
                 )
                 row = cursor.fetchone()
                 if row and row[0]:
-                    return QuizContentModel(content=str(row[0]))
+                    return QuizContent(kind="direct", content=str(row[0]))
 
-        return AIQuizFallbackModel(subject=subject, topic=topic)
+        return QuizContent(kind="fallback", subject=subject, topic=topic)
