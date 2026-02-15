@@ -28,6 +28,32 @@
 - Remove low-value passthrough helpers and duplicated mapping layers.
 - Keep comments short and only for non-obvious logic blocks.
 
+## Structure Standards
+
+### 1) Layering and dependency direction
+- `novel_engine/core/*`: domain logic only (engine/person/plan orchestration), no loose JSON parsing.
+- `novel_engine/data/*`: storage/query layer only (sqlite/data loading), no chapter prompt orchestration.
+- Entry files (`main.py`, `generate_full_plan.py`) are the only top-level process orchestrators.
+- Dependency direction must be one-way: `entry -> core -> data`; avoid reverse imports.
+
+### 2) Contract boundaries
+- All persisted or loaded boundary data must use models in `novel_engine/core/contracts.py`.
+- Core modules exchange typed objects/models, not `dict[str, Any]` payload protocols.
+- Any schema change must be reflected in tests under `tests/test_40+`.
+
+### 3) Module ownership
+- `being_engine.py`: weekly simulation flow and state transitions only.
+- `person.py`: person lifecycle/state mapping (`from_profile/to_profile/from_state/to_state`).
+- `plan_builder.py`: weekly script/world settings build pipeline only.
+- `presenters.py` + `view_models.py`: text rendering and display DTOs only.
+- `ai_writer.py`: LLM call + generation control only; no business state mutation.
+
+### 4) Naming and conventions
+- Keep role semantics in English literals: `protagonist/classmate/teacher`.
+- Keep placeholders unified: `{p1}/{p2}/{p3}/{p4}`.
+- Do not introduce synonym constants for same semantic value.
+- Prefer descriptive function names by behavior; avoid thin wrappers that only forward params.
+
 ## Test Workflow
 
 ### A) Fast local gate (before commit)
@@ -67,3 +93,69 @@ Current canonical suite includes:
 - No new fallback/default-silencing behavior introduced.
 - Pydantic contract changes are reflected in tests.
 - `uv run pytest -q tests` passes.
+
+## Events Extraction Ops
+
+### 1) Incremental extraction (resume by default)
+```bash
+set -a; . ./.env; set +a
+uv run python events_extraction/extract_agent_events.py --limit 20 --sleep 0
+```
+- Resume files:
+  - `events_extraction/.agent_events_done_chunks.txt`
+  - `events_extraction/.agent_events_checkpoint.json`
+- Output file:
+  - `events_extraction/agent_events.jsonl`
+- DB sync:
+  - automatically syncs into `novel_engine/data/storage/world_data.db` table `event_pool` (source=`merged`)
+  - use `--no-sync-db` to disable auto sync
+
+### 2) Reset progress (do not delete output)
+```bash
+uv run python events_extraction/extract_agent_events.py --reset-progress --limit 0
+```
+
+### 2.1) Rebuild output from scratch (single-pass final format)
+```bash
+set -a; . ./.env; set +a
+uv run python events_extraction/extract_agent_events.py --reset-progress --reset-output --sleep 0
+```
+- Output is final format directly:
+  - `【时间·地点】` prefix
+  - `{p1}/{p2}/{p3}/{p4}` placeholders
+
+### 2.2) Sync events into DB unified pool
+```bash
+uv run python helper/sync_event_pool.py
+```
+- Mostly for one-shot rebuild/migration; daily extraction flow already auto-syncs via `extract_agent_events.py`.
+- Target table:
+  - `event_pool` in `novel_engine/data/storage/world_data.db`
+- Sources:
+  - `events_extraction/legacy_events_cleaned.jsonl` (preferred if present)
+  - legacy `events` table (fallback)
+  - `events_extraction/agent_events.jsonl`
+
+### 2.3) AI normalize legacy events to `{p1...}` format
+```bash
+set -a; . ./.env; set +a
+uv run python helper/normalize_legacy_events_with_llm.py --reset --batch-size 20 --sleep 0
+```
+- Output:
+  - `events_extraction/legacy_events_cleaned.jsonl`
+- Resume checkpoint:
+  - `events_extraction/.legacy_events_clean_checkpoint.json`
+
+### 3) Temp file cleanup
+```bash
+rm -f events_extraction/raw_moments.jsonl events_extraction/moments_extracted.jsonl
+rm -rf events_extraction/__pycache__
+```
+- Keep only the active extraction script:
+  - `events_extraction/extract_agent_events.py`
+
+### 4) Optional legacy cleaner
+```bash
+set -a; . ./.env; set +a
+uv run python events_extraction/clean_agent_events_with_llm.py --reset --batch-size 20 --sleep 0
+```

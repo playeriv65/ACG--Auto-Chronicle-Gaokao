@@ -10,7 +10,7 @@ from novel_engine.data.database import NPCData
 
 def test() -> None:
     print("Testing NPCData...")
-    name = NPCData.get_name("M", "00s")
+    name = NPCData.get_name(True, "00s")
     print(f"Generated Name: {name}")
 
     print(f"Families: {NPCData.FAMILIES[:3]}...")

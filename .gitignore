@@ -45,3 +45,17 @@ archive/
 
 # Local test artifacts
 test_reports/
+
+# Event extraction artifacts
+events_extraction/__pycache__/
+events_extraction/.agent_events_done_chunks.txt
+events_extraction/.agent_events_checkpoint.json
+events_extraction/.agent_events_clean_checkpoint.json
+events_extraction/.legacy_events_clean_checkpoint.json
+events_extraction/.agent_events_pid
+events_extraction/raw_moments.jsonl
+events_extraction/moments_extracted.jsonl
+events_extraction/agent_events_cleaned_preview.jsonl
+events_extraction/all_events_current.jsonl
+events_extraction/chunks_for_llm.jsonl
+events_extraction/fictions/

@@ -4,6 +4,7 @@ import argparse
 import io
 import json
 import os
+import random
 import sys
 import time
 from typing import Tuple
@@ -17,6 +18,7 @@ from novel_engine.core.ai_writer import writer
 from novel_engine.core.being_engine import BeingEngine
 from novel_engine.core.contracts import RuntimeState, WeeklyScript, WorldSettings
 from novel_engine.core.presenters import render_student_detail
+from novel_engine.data.database import get_random_event
 
 CHAPTER_DIR = Config.PATHS["CHAPTERS_DIR"]
 SAVE_FILE = Config.PATHS["SAVE_STATE"]
@@ -100,6 +102,24 @@ class NovelGenerator:
             chapter_end_marker=Config.CHAPTER_END_MARKER,
         )
 
+    def _build_random_event_placeholders(self) -> dict[str, str]:
+        names = [p.name for p in (self.engine.students + self.engine.teachers)]
+        if not names:
+            raise RuntimeError("Cannot build event placeholders: no characters in engine state")
+        shuffled = random.sample(names, k=len(names))
+        picked = shuffled[:4]
+        while len(picked) < 4:
+            picked.append(picked[0])
+        return {f"p{i + 1}": picked[i] for i in range(4)}
+
+    def _sample_dynamic_chapter_details(self) -> list[str]:
+        details: list[str] = []
+        for _ in range(Config.CHAPTER_DYNAMIC_EVENT_COUNT):
+            placeholders = self._build_random_event_placeholders()
+            event = get_random_event("ANY", placeholders=placeholders)
+            details.append(f"【互动模板】{event.description}")
+        return details
+
     def _build_prompt(self, date_key: str, battle_type: str, mc_detail_text: str, quiz_content: str | None) -> str:
         plan_data = self.weekly_script.weeks.get(date_key)
         if plan_data is None:
@@ -107,7 +127,9 @@ class NovelGenerator:
         if not plan_data.details:
             raise ValueError(f"Weekly script details missing for {date_key}")
 
-        details_text = "\n".join(plan_data.details)
+        details = list(plan_data.details)
+        details.extend(self._sample_dynamic_chapter_details())
+        details_text = "\n".join(details)
         return Config.MAIN_SCENE_PROMPT_TEMPLATE.format(
             world_description=self.world_settings.meta.description,
             date_key=date_key,

@@ -1,9 +1,34 @@
 from __future__ import annotations
 
+import json
 import os
 import sqlite3
+from pathlib import Path
 
 DB_PATH = "novel_engine/data/storage/world_data.db"
+AGENT_EVENTS_PATH = Path("events_extraction/agent_events.jsonl")
+
+
+def _legacy_event_to_template(description: str) -> str:
+    text = description.strip()
+    if text.startswith("【"):
+        return text
+    return f"【日常时段·校园】{{p1}}遭遇：{text}"
+
+
+def _load_agent_event_templates(path: Path) -> list[str]:
+    if not path.exists():
+        return []
+    templates: list[str] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        s = line.strip()
+        if not s:
+            continue
+        obj = json.loads(s)
+        content = obj.get("content")
+        if isinstance(content, str) and content:
+            templates.append(content)
+    return templates
 
 
 def seed_db() -> None:
@@ -34,6 +59,20 @@ def seed_db() -> None:
         season TEXT,
         description TEXT UNIQUE,
         effect TEXT
+    )
+    """
+    )
+
+    cursor.execute(
+        """
+    CREATE TABLE IF NOT EXISTS event_pool (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT NOT NULL,
+        season TEXT NOT NULL DEFAULT 'ANY',
+        template TEXT NOT NULL,
+        effect TEXT NOT NULL DEFAULT '',
+        enabled INTEGER NOT NULL DEFAULT 1,
+        UNIQUE(source, template)
     )
     """
     )
@@ -94,6 +133,27 @@ def seed_db() -> None:
     ]
     print(f"Injecting {len(events_data)} events...")
     cursor.executemany("INSERT OR IGNORE INTO events (season, description, effect) VALUES (?, ?, ?)", events_data)
+
+    legacy_pool_rows = [
+        ("legacy", season, _legacy_event_to_template(description), effect, 1)
+        for season, description, effect in events_data
+    ]
+    print(f"Injecting {len(legacy_pool_rows)} legacy templates into event_pool...")
+    cursor.executemany(
+        "INSERT OR IGNORE INTO event_pool (source, season, template, effect, enabled) VALUES (?, ?, ?, ?, ?)",
+        legacy_pool_rows,
+    )
+
+    agent_templates = _load_agent_event_templates(AGENT_EVENTS_PATH)
+    if agent_templates:
+        agent_pool_rows = [("agent", "ANY", tpl, "", 1) for tpl in agent_templates]
+        print(f"Injecting {len(agent_pool_rows)} extracted templates into event_pool...")
+        cursor.executemany(
+            "INSERT OR IGNORE INTO event_pool (source, season, template, effect, enabled) VALUES (?, ?, ?, ?, ?)",
+            agent_pool_rows,
+        )
+    else:
+        print("No extracted templates found at events_extraction/agent_events.jsonl")
 
     conn.commit()
     conn.close()

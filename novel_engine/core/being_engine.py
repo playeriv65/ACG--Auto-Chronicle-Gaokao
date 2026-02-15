@@ -176,10 +176,11 @@ class BeingEngine:
             focus_students[0] = self.protagonist
 
         for student in focus_students:
-            event = get_random_event(season)
+            placeholders = self._build_event_placeholders(student)
+            event = get_random_event(season, placeholders=placeholders)
             self.global_cooldowns[event.description] = abs_week
             apply_effect(student, event.effect)
-            logs.append(f"【突发】{student.name}: {event.description}")
+            logs.append(f"【突发】{event.description}")
 
             unlock_prob = (
                 Config.PROTAGONIST_SKILL_BREAKTHROUGH_PROB
@@ -188,6 +189,14 @@ class BeingEngine:
             )
             if random.random() < unlock_prob:
                 self._try_unlock_skill(student, logs)
+
+    def _build_event_placeholders(self, student: Person) -> Dict[str, str]:
+        candidates = [p.name for p in (self.students + self.teachers) if p.name != student.name]
+        random.shuffle(candidates)
+        picked = [student.name] + candidates[:3]
+        while len(picked) < 4:
+            picked.append(student.name)
+        return {f"p{i + 1}": picked[i] for i in range(4)}
 
     def _try_unlock_skill(self, student: Person, logs: List[str]) -> None:
         target_subj = random.choice(CORE_SUBJECTS)

@@ -41,6 +41,13 @@ class EventRecord(StrictModel):
     effect: str
 
 
+class EventTemplateRecord(StrictModel):
+    source: str
+    season: str
+    template: str
+    effect: str
+
+
 class ArchetypeRecord(StrictModel):
     name: str
     title: str
@@ -85,16 +92,56 @@ class SkillTree:
             conn.close()
 
 
-def get_random_event(season: str = "ANY") -> EventRecord:
+def get_random_event(season: str = "ANY", placeholders: dict[str, str] | None = None) -> EventRecord:
+    return get_random_event_from_pool(season=season, placeholders=placeholders)
+
+
+def _render_event_template(template: str, placeholders: dict[str, str] | None) -> str:
+    if placeholders is None:
+        return template
+    rendered = template
+    for key, value in placeholders.items():
+        rendered = rendered.replace(f"{{{key}}}", value)
+        rendered = rendered.replace(f"{{{key.upper()}}}", value)
+    return rendered
+
+
+def _load_event_templates(cursor: sqlite3.Cursor, season: str) -> list[EventTemplateRecord]:
+    cursor.execute(
+        """
+        SELECT source, season, template, effect
+        FROM event_pool
+        WHERE enabled = 1 AND (season = 'ANY' OR season = ?)
+        """,
+        (season,),
+    )
+    rows = cursor.fetchall()
+    return [EventTemplateRecord(source=r[0], season=r[1], template=r[2], effect=r[3] or "") for r in rows]
+
+
+def _table_exists(cursor: sqlite3.Cursor, table_name: str) -> bool:
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name = ?", (table_name,))
+    return cursor.fetchone() is not None
+
+
+def get_random_event_from_pool(season: str = "ANY", placeholders: dict[str, str] | None = None) -> EventRecord:
     conn = DBConnector.get_connection()
     try:
         cursor = conn.cursor()
+
+        if _table_exists(cursor, "event_pool"):
+            templates = _load_event_templates(cursor, season)
+            if templates:
+                chosen = random.choice(templates)
+                rendered = _render_event_template(chosen.template, placeholders)
+                return EventRecord(description=rendered, effect=chosen.effect)
+
         cursor.execute("SELECT description, effect FROM events WHERE season = 'ANY' OR season = ?", (season,))
-        rows = cursor.fetchall()
-        if not rows:
+        legacy_rows = cursor.fetchall()
+        if not legacy_rows:
             raise ValueError(f"No events found for season: {season}")
-        chosen = random.choice(rows)
-        return EventRecord(description=chosen[0], effect=chosen[1])
+        chosen = random.choice(legacy_rows)
+        return EventRecord(description=chosen[0], effect=chosen[1] or "")
     finally:
         conn.close()
 
