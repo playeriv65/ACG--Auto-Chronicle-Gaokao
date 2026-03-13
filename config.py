@@ -37,6 +37,7 @@ class Config:
     MAX_TOKENS: int = 16384
     TEMPERATURE: float = 0.7
     ENABLE_THINKING: bool = True
+    STREAM_OUTPUT: bool = os.getenv("STREAM_OUTPUT", "0") == "1"
 
     with open("text_for_gen/prompts.yaml", "r", encoding="utf-8") as f:
         _prompts_raw = yaml.safe_load(f)
@@ -56,6 +57,8 @@ class Config:
         SUMMARY_USER_PROMPT_TEMPLATE: str = _require_prompt_str(_prompts, "ai_writer", "summary", "user_template")
         MAIN_SCENE_STATS_CONTEXT: str = _require_prompt_str(_prompts, "main", "scene_stats_context")
         MAIN_SYSTEM_INSTRUCTION_TEMPLATE: str = _require_prompt_str(_prompts, "main", "system_instruction_template")
+        MAIN_TIME_ANCHOR_TEMPLATE: str = _require_prompt_str(_prompts, "main", "time_anchor_template")
+        MAIN_TIME_GUARDRAIL_TEMPLATE: str = _require_prompt_str(_prompts, "main", "time_guardrail_template")
         MAIN_SCENE_PROMPT_TEMPLATE: str = _require_prompt_str(_prompts, "main", "scene_prompt_template")
         MAIN_QUIZ_EMPTY_TEXT: str = _require_prompt_str(_prompts, "main", "quiz_empty_text")
 
@@ -76,7 +79,7 @@ class Config:
     MONTHLY_EXAM_INTERVAL: int = 4
 
     DEFAULT_CLASSMATE_COUNT: int = 28
-    RANDOM_EVENT_FOCUS_COUNT: int = 3
+    RANDOM_EVENT_FOCUS_COUNT: int = 30
     INFO_OLYMPIAD_UNLOCK_ABS_WEEK: int = 11
 
     PROTAGONIST_SKILL_BREAKTHROUGH_PROB: float = 0.4
@@ -88,6 +91,7 @@ class Config:
     FALLBACK_RANK: int = 999
 
     CHAPTER_MIN_LENGTH: int = 4000
+    CHAPTER_MAX_LENGTH: int = 10000
     CHAPTER_DYNAMIC_EVENT_COUNT: int = 2
 
     PROTAGONIST_BASE_TALENT: int = 100
@@ -107,9 +111,13 @@ class Config:
     NORMAL_MASTERY_MAX: int = 1500
 
     DEFAULT_MOOD: int = 50
+    MIN_MOOD: int = 0
+    MAX_MOOD: int = 100
     DEFAULT_STRESS: int = 0
     DEFAULT_FATIGUE: int = 0
     DEFAULT_LAST_WEEK_RANK: int = 0
+    RELATION_MIN: int = -100
+    RELATION_MAX: int = 100
 
     EXAM_STRESS_INCREMENT: int = 15
     INFO_OPTIONAL_START_WEEK: int = 10

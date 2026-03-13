@@ -39,6 +39,8 @@ class SkillRecord(StrictModel):
 class EventRecord(StrictModel):
     description: str
     effect: str
+    relation_delta: int
+    mood_delta: int
 
 
 class EventTemplateRecord(StrictModel):
@@ -46,6 +48,8 @@ class EventTemplateRecord(StrictModel):
     season: str
     template: str
     effect: str
+    relation_delta: int
+    mood_delta: int
 
 
 class ArchetypeRecord(StrictModel):
@@ -106,17 +110,52 @@ def _render_event_template(template: str, placeholders: dict[str, str] | None) -
     return rendered
 
 
-def _load_event_templates(cursor: sqlite3.Cursor, season: str) -> list[EventTemplateRecord]:
+def _ensure_event_pool_schema(cursor: sqlite3.Cursor) -> None:
     cursor.execute(
         """
-        SELECT source, season, template, effect
+        CREATE TABLE IF NOT EXISTS event_pool (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source TEXT NOT NULL,
+            season TEXT NOT NULL DEFAULT 'ANY',
+            template TEXT NOT NULL,
+            effect TEXT NOT NULL DEFAULT '',
+            relation_delta INTEGER NOT NULL DEFAULT 0,
+            mood_delta INTEGER NOT NULL DEFAULT 0,
+            enabled INTEGER NOT NULL DEFAULT 1,
+            UNIQUE(source, template)
+        )
+        """
+    )
+    cursor.execute("PRAGMA table_info(event_pool)")
+    cols = {row[1] for row in cursor.fetchall()}
+    if "relation_delta" not in cols:
+        cursor.execute("ALTER TABLE event_pool ADD COLUMN relation_delta INTEGER NOT NULL DEFAULT 0")
+    if "mood_delta" not in cols:
+        cursor.execute("ALTER TABLE event_pool ADD COLUMN mood_delta INTEGER NOT NULL DEFAULT 0")
+
+
+def _load_event_templates(cursor: sqlite3.Cursor, season: str) -> list[EventTemplateRecord]:
+    _ensure_event_pool_schema(cursor)
+    cursor.execute(
+        """
+        SELECT source, season, template, effect, relation_delta, mood_delta
         FROM event_pool
         WHERE enabled = 1 AND (season = 'ANY' OR season = ?)
         """,
         (season,),
     )
     rows = cursor.fetchall()
-    return [EventTemplateRecord(source=r[0], season=r[1], template=r[2], effect=r[3] or "") for r in rows]
+    return [
+        EventTemplateRecord(
+            source=r[0],
+            season=r[1],
+            template=r[2],
+            effect=r[3] or "",
+            relation_delta=int(r[4]),
+            mood_delta=int(r[5]),
+        )
+        for r in rows
+    ]
 
 
 def _table_exists(cursor: sqlite3.Cursor, table_name: str) -> bool:
@@ -134,14 +173,19 @@ def get_random_event_from_pool(season: str = "ANY", placeholders: dict[str, str]
             if templates:
                 chosen = random.choice(templates)
                 rendered = _render_event_template(chosen.template, placeholders)
-                return EventRecord(description=rendered, effect=chosen.effect)
+                return EventRecord(
+                    description=rendered,
+                    effect=chosen.effect,
+                    relation_delta=chosen.relation_delta,
+                    mood_delta=chosen.mood_delta,
+                )
 
         cursor.execute("SELECT description, effect FROM events WHERE season = 'ANY' OR season = ?", (season,))
         legacy_rows = cursor.fetchall()
         if not legacy_rows:
             raise ValueError(f"No events found for season: {season}")
         chosen = random.choice(legacy_rows)
-        return EventRecord(description=chosen[0], effect=chosen[1] or "")
+        return EventRecord(description=chosen[0], effect=chosen[1] or "", relation_delta=0, mood_delta=0)
     finally:
         conn.close()
 

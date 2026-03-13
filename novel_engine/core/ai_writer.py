@@ -54,9 +54,42 @@ class AIWriter:
         if self.debug:
             self._debug_dump_prompt(request.messages)
 
+        messages = self._to_openai_messages(request.messages)
+        if Config.STREAM_OUTPUT:
+            stream = self.client.chat.completions.create(
+                model=Config.MODEL_NAME,
+                messages=messages,
+                temperature=Config.TEMPERATURE,
+                max_tokens=request.max_tokens,
+                extra_body=self._build_extra_body(),
+                stream=True,
+            )
+            content_chunks: list[str] = []
+            reasoning_chunks: list[str] = []
+            for chunk in stream:
+                if not getattr(chunk, "choices", None):
+                    continue
+                if len(chunk.choices) == 0 or getattr(chunk.choices[0], "delta", None) is None:
+                    continue
+                delta = chunk.choices[0].delta
+                reasoning = getattr(delta, "reasoning_content", None)
+                if reasoning:
+                    reasoning_chunks.append(reasoning)
+                    sys.stdout.write(reasoning)
+                    sys.stdout.flush()
+                content = getattr(delta, "content", None)
+                if content:
+                    content_chunks.append(content)
+                    sys.stdout.write(content)
+                    sys.stdout.flush()
+            full_response = "".join(content_chunks).strip() or "".join(reasoning_chunks).strip()
+            if not full_response:
+                raise RuntimeError("Empty response from streaming API")
+            return ChatResponse(content=full_response).content
+
         completion = self.client.chat.completions.create(
             model=Config.MODEL_NAME,
-            messages=self._to_openai_messages(request.messages),
+            messages=messages,
             temperature=Config.TEMPERATURE,
             max_tokens=request.max_tokens,
             extra_body=self._build_extra_body(),

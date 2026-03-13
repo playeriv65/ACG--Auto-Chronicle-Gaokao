@@ -5,6 +5,7 @@ import io
 import json
 import os
 import random
+import re
 import sys
 import time
 from typing import Tuple
@@ -24,6 +25,15 @@ CHAPTER_DIR = Config.PATHS["CHAPTERS_DIR"]
 SAVE_FILE = Config.PATHS["SAVE_STATE"]
 WORLD_SETTINGS_FILE = Config.PATHS["WORLD_SETTINGS"]
 WEEKLY_SCRIPT_FILE = Config.PATHS["WEEKLY_SCRIPT"]
+RUNTIME_DETAIL_PREFIXES = (
+    "【随机互动】",
+    "【时间锚点】",
+    "【时间守则】",
+    "【主角状态】",
+    "【排名摘要】",
+    "【主角心境】",
+    "【社交网络】",
+)
 
 
 def parse_chapter_range(value: str) -> Tuple[int, int]:
@@ -93,6 +103,10 @@ class NovelGenerator:
         with open(SAVE_FILE, "w", encoding="utf-8") as f:
             json.dump(runtime_state.model_dump(mode="json"), f, ensure_ascii=False, indent=2)
 
+    def _save_weekly_script(self) -> None:
+        with open(WEEKLY_SCRIPT_FILE, "w", encoding="utf-8") as f:
+            json.dump(self.weekly_script.model_dump(mode="json"), f, ensure_ascii=False, indent=2)
+
     def _build_system_instruction(self) -> str:
         prompt_config = self.world_settings.meta.system_prompt
         return Config.MAIN_SYSTEM_INSTRUCTION_TEMPLATE.format(
@@ -117,21 +131,76 @@ class NovelGenerator:
         for _ in range(Config.CHAPTER_DYNAMIC_EVENT_COUNT):
             placeholders = self._build_random_event_placeholders()
             event = get_random_event("ANY", placeholders=placeholders)
-            details.append(f"【互动模板】{event.description}")
+            details.append(f"【随机互动】{event.description}")
         return details
 
+    def _build_time_anchor_text(self, date_key: str, plan_date: str) -> tuple[str, str]:
+        term_label = f"高{self.year}{'上' if self.semester == 1 else '下'}"
+        week_num = f"{self.week:02d}"
+        anchor = Config.MAIN_TIME_ANCHOR_TEMPLATE.format(
+            term_label=term_label,
+            week_num=week_num,
+            plan_date=plan_date,
+            date_key=date_key,
+        )
+        guardrail = Config.MAIN_TIME_GUARDRAIL_TEMPLATE
+        return anchor, guardrail
+
+    def _build_social_runtime_details(self) -> list[str]:
+        protagonist = self.engine.protagonist
+        row = self.engine.social_graph.get(protagonist.name)
+        if row is None:
+            raise KeyError(f"Missing protagonist social graph row: {protagonist.name}")
+
+        positive = [(name, score) for name, score in row.items() if score > 0]
+        negative = [(name, score) for name, score in row.items() if score < 0]
+        top_positive = sorted(positive, key=lambda item: item[1], reverse=True)[:3]
+        top_negative = sorted(negative, key=lambda item: item[1])[:3]
+
+        close_text = "，".join(f"{name}(+{score})" for name, score in top_positive) if top_positive else "暂无"
+        tense_text = "，".join(f"{name}({score})" for name, score in top_negative) if top_negative else "暂无"
+
+        return [
+            f"【主角心境】心情值:{protagonist.mood}/100",
+            f"【社交网络】亲近关系:{close_text}；紧张关系:{tense_text}。写作时需体现在对话语气、站位与冲突倾向中。",
+        ]
+
+    def _assert_date_key_matches_runtime(self, date_key: str) -> None:
+        match = re.fullmatch(r"G(\d+)S(\d+)_W(\d{2})", date_key)
+        if match is None:
+            raise ValueError(f"Invalid date key format: {date_key}")
+        key_year, key_semester, key_week = (int(match.group(1)), int(match.group(2)), int(match.group(3)))
+        if (key_year, key_semester, key_week) != (self.year, self.semester, self.week):
+            raise ValueError(
+                "Date key and runtime state mismatch: "
+                f"date_key={date_key}, runtime=G{self.year}S{self.semester}_W{self.week:02d}"
+            )
+
     def _build_prompt(self, date_key: str, battle_type: str, mc_detail_text: str, quiz_content: str | None) -> str:
+        self._assert_date_key_matches_runtime(date_key)
         plan_data = self.weekly_script.weeks.get(date_key)
         if plan_data is None:
             raise KeyError(f"Missing weekly script entry: {date_key}")
         if not plan_data.details:
             raise ValueError(f"Weekly script details missing for {date_key}")
 
-        details = list(plan_data.details)
-        details.extend(self._sample_dynamic_chapter_details())
-        details_text = "\n".join(details)
+        base_details = [d for d in plan_data.details if not d.startswith(RUNTIME_DETAIL_PREFIXES)]
+        time_anchor, time_guardrail = self._build_time_anchor_text(date_key, plan_data.date)
+        runtime_details = self._sample_dynamic_chapter_details()
+        runtime_details.append(time_anchor)
+        runtime_details.append(time_guardrail)
+        runtime_details.append(f"【主角状态】{mc_detail_text}")
+        runtime_details.append(f"【排名摘要】{plan_data.rankings.mc_report}")
+        runtime_details.extend(self._build_social_runtime_details())
+
+        merged_details = base_details + runtime_details
+        plan_data.details = merged_details
+        self._save_weekly_script()
+
+        details_text = "\n".join(merged_details)
         return Config.MAIN_SCENE_PROMPT_TEMPLATE.format(
             world_description=self.world_settings.meta.description,
+            time_anchor_text=f"{time_anchor}\n{time_guardrail}",
             date_key=date_key,
             plan_date=plan_data.date,
             battle_type=battle_type,
@@ -176,7 +245,7 @@ class NovelGenerator:
             Config.MAIN_SCENE_STATS_CONTEXT,
             system_instruction=system_instruction,
             min_length=Config.CHAPTER_MIN_LENGTH,
-            max_length=2000,
+            max_length=Config.CHAPTER_MAX_LENGTH,
         )
         self._write_chapter(date_key, content)
         print(f" Done ({len(content)} chars)")

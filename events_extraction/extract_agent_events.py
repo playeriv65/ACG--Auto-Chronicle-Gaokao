@@ -211,15 +211,24 @@ def _sync_events_to_db(output_file: Path, db_file: Path) -> None:
                 season TEXT NOT NULL DEFAULT 'ANY',
                 template TEXT NOT NULL,
                 effect TEXT NOT NULL DEFAULT '',
+                relation_delta INTEGER NOT NULL DEFAULT 0,
+                mood_delta INTEGER NOT NULL DEFAULT 0,
                 enabled INTEGER NOT NULL DEFAULT 1,
                 UNIQUE(source, template)
             )
             """
         )
+        cursor.execute("PRAGMA table_info(event_pool)")
+        cols = {row[1] for row in cursor.fetchall()}
+        if "relation_delta" not in cols:
+            cursor.execute("ALTER TABLE event_pool ADD COLUMN relation_delta INTEGER NOT NULL DEFAULT 0")
+        if "mood_delta" not in cols:
+            cursor.execute("ALTER TABLE event_pool ADD COLUMN mood_delta INTEGER NOT NULL DEFAULT 0")
         before_changes = conn.total_changes
-        rows = [("merged", "ANY", t, "", 1) for t in templates]
+        rows = [("merged", "ANY", t, "", 4, 3, 1) for t in templates]
         cursor.executemany(
-            "INSERT OR IGNORE INTO event_pool (source, season, template, effect, enabled) VALUES (?, ?, ?, ?, ?)",
+            "INSERT OR IGNORE INTO event_pool (source, season, template, effect, relation_delta, mood_delta, enabled) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
             rows,
         )
         conn.commit()
@@ -238,6 +247,7 @@ def run(
     reset_progress: bool,
     reset_output: bool,
     sync_db: bool,
+    request_timeout_sec: float,
 ) -> None:
     api_key = os.getenv("API_KEY")
     base_url = os.getenv("BASE_URL")
@@ -245,7 +255,7 @@ def run(
     if not api_key or not base_url or not model_name:
         raise RuntimeError("Missing API_KEY / BASE_URL / MODEL_NAME in environment")
 
-    client = OpenAI(api_key=api_key, base_url=base_url)
+    client = OpenAI(api_key=api_key, base_url=base_url, timeout=request_timeout_sec)
     chunks = _load_jsonl(CHUNKS_FILE)
     if reset_progress:
         PROCESSED_CHUNKS_FILE.write_text("", encoding="utf-8")
@@ -289,6 +299,7 @@ def run(
                             temperature=0.2,
                             max_tokens=1200,
                             extra_body={"chat_template_kwargs": {"enable_thinking": False, "clear_thinking": True}},
+                            timeout=request_timeout_sec,
                             stream=False,
                         )
                         message = completion.choices[0].message
@@ -301,10 +312,43 @@ def run(
 
                 if not content:
                     if last_error:
-                        raise RuntimeError(f"Request failed for chunk {chunk_id}: {last_error}") from last_error
-                    raise RuntimeError(f"Empty response for chunk {chunk_id}")
+                        print(f"[{idx}/{len(pending)}] {chunk_id} -> request_failed: {last_error}", flush=True)
+                        done_f.write(chunk_id + "\n")
+                        done_f.flush()
+                        done_chunks.add(chunk_id)
+                        _save_checkpoint(
+                            CHECKPOINT_FILE,
+                            chunk_id=chunk_id,
+                            processed_chunks=len(done_chunks),
+                            event_counter=event_counter,
+                        )
+                        continue
+                    print(f"[{idx}/{len(pending)}] {chunk_id} -> empty_response", flush=True)
+                    done_f.write(chunk_id + "\n")
+                    done_f.flush()
+                    done_chunks.add(chunk_id)
+                    _save_checkpoint(
+                        CHECKPOINT_FILE,
+                        chunk_id=chunk_id,
+                        processed_chunks=len(done_chunks),
+                        event_counter=event_counter,
+                    )
+                    continue
 
-                payload = _extract_json_payload(content)
+                try:
+                    payload = _extract_json_payload(content)
+                except Exception as exc:  # noqa: BLE001
+                    print(f"[{idx}/{len(pending)}] {chunk_id} -> invalid_json: {exc}", flush=True)
+                    done_f.write(chunk_id + "\n")
+                    done_f.flush()
+                    done_chunks.add(chunk_id)
+                    _save_checkpoint(
+                        CHECKPOINT_FILE,
+                        chunk_id=chunk_id,
+                        processed_chunks=len(done_chunks),
+                        event_counter=event_counter,
+                    )
+                    continue
                 try:
                     events = _normalize_events(payload.get("events"))
                 except ValueError as exc:
@@ -349,6 +393,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Extract agent-interaction events from chunked fiction.")
     parser.add_argument("--limit", type=int, default=None, help="Only process first N pending chunks.")
     parser.add_argument("--sleep", type=float, default=0.2, help="Sleep seconds between API calls.")
+    parser.add_argument("--timeout", type=float, default=90.0, help="Per-request timeout in seconds.")
     parser.add_argument("--model", type=str, default=None, help="Override MODEL_NAME from env.")
     parser.add_argument(
         "--reset-progress",
@@ -373,4 +418,5 @@ if __name__ == "__main__":
         reset_progress=args.reset_progress,
         reset_output=args.reset_output,
         sync_db=not args.no_sync_db,
+        request_timeout_sec=args.timeout,
     )

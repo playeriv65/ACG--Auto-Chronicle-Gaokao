@@ -42,9 +42,13 @@ ai_writer:
 main:
   scene_stats_context: "维持高武侠风格，写满4000字。"
   system_instruction_template: "你是一个{role}。风格要求：{style}。创作要求：{requirements}。完结后输出 {chapter_end_marker}。"
+  time_anchor_template: "【时间锚点】当前为{term_label}第{week_num}周（公历{plan_date}，节点{date_key}）。"
+  time_guardrail_template: "【时间守则】本章叙事必须严格服从以上时间，不得写成其他年级/学期/日期，不得跨周跳时。"
   scene_prompt_template: |
     【世界观】
     {world_description}
+
+    {time_anchor_text}
 
     【节点】{date_key} ({plan_date}) {battle_type}
     【剧本大纲】

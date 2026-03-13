@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from typing import Dict, List, Literal
 
-from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class StrictModel(BaseModel):
@@ -133,6 +133,7 @@ class EngineState(StrictModel):
     students: List[PersonState]
     teachers: List[PersonState]
     global_cooldowns: Dict[str, int]
+    social_graph: Dict[str, Dict[str, int]] = Field(default_factory=dict)
     year: int
     semester: int
     last_battle_subjects: List[str]

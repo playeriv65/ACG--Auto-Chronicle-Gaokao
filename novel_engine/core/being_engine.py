@@ -45,6 +45,7 @@ class BeingEngine:
         self.protagonist: Person
         self.rankings: List[Person] = []
         self.global_cooldowns: Dict[str, int] = {}
+        self.social_graph: Dict[str, Dict[str, int]] = {}
         self.year: int = 1
         self.semester: int = 1
         self.last_battle_subjects: List[str] = []
@@ -60,6 +61,7 @@ class BeingEngine:
             students=[s.to_state() for s in self.students],
             teachers=[t.to_state() for t in self.teachers],
             global_cooldowns=self.global_cooldowns,
+            social_graph={name: dict(edges) for name, edges in self.social_graph.items()},
             year=self.year,
             semester=self.semester,
             last_battle_subjects=self.last_battle_subjects,
@@ -74,15 +76,19 @@ class BeingEngine:
         self.protagonist = protagonist
 
         self.global_cooldowns = dict(state.global_cooldowns)
+        self.social_graph = {name: dict(edges) for name, edges in state.social_graph.items()}
+        self._ensure_social_graph_consistency()
         self.year = state.year
         self.semester = state.semester
         self.last_battle_subjects = list(state.last_battle_subjects)
 
     def init_from_settings(self, settings: WorldSettings) -> None:
         self.initializer.init_from_settings(settings)
+        self._rebuild_social_graph()
 
     def init_world(self) -> None:
         self.initializer.init_world()
+        self._rebuild_social_graph()
 
     def tick(self, week_idx: int) -> Tuple[List[str], str, QuizContent | None]:
         abs_week = (self.year - 1) * Config.WEEKS_PER_YEAR + (self.semester - 1) * Config.WEEKS_PER_SEMESTER + week_idx
@@ -178,8 +184,10 @@ class BeingEngine:
         for student in focus_students:
             placeholders = self._build_event_placeholders(student)
             event = get_random_event(season, placeholders=placeholders)
+            actor_a, actor_b = self._resolve_event_pair(placeholders)
             self.global_cooldowns[event.description] = abs_week
             apply_effect(student, event.effect)
+            self._apply_event_social_and_mood(actor_a, actor_b, event.relation_delta, event.mood_delta)
             logs.append(f"【突发】{event.description}")
 
             unlock_prob = (
@@ -197,6 +205,78 @@ class BeingEngine:
         while len(picked) < 4:
             picked.append(student.name)
         return {f"p{i + 1}": picked[i] for i in range(4)}
+
+    def _rebuild_social_graph(self) -> None:
+        names = [person.name for person in (self.students + self.teachers)]
+        if len(set(names)) != len(names):
+            raise ValueError("Duplicate person names in social graph")
+        self.social_graph = {
+            src: {dst: 0 for dst in names if dst != src}
+            for src in names
+        }
+
+    def _ensure_social_graph_consistency(self) -> None:
+        if not self.social_graph:
+            self._rebuild_social_graph()
+            return
+
+        people = {person.name for person in (self.students + self.teachers)}
+        if set(self.social_graph) != people:
+            raise ValueError("social_graph person set mismatch")
+
+        for src in people:
+            row = self.social_graph[src]
+            expected_targets = people - {src}
+            if set(row) != expected_targets:
+                raise ValueError(f"social_graph targets mismatch for {src}")
+            for dst, score in row.items():
+                if not isinstance(score, int):
+                    raise TypeError(f"social score type invalid: {src}->{dst}={score!r}")
+                if score < Config.RELATION_MIN or score > Config.RELATION_MAX:
+                    raise ValueError(f"social score out of range: {src}->{dst}={score}")
+                if self.social_graph[dst][src] != score:
+                    raise ValueError(f"social score asymmetric: {src}<->{dst}")
+
+    @staticmethod
+    def _clamp_relation(value: int) -> int:
+        return max(Config.RELATION_MIN, min(Config.RELATION_MAX, value))
+
+    @staticmethod
+    def _clamp_mood(value: int) -> int:
+        return max(Config.MIN_MOOD, min(Config.MAX_MOOD, value))
+
+    def _resolve_event_pair(self, placeholders: Dict[str, str]) -> tuple[str, str]:
+        actor_a = placeholders.get("p1")
+        actor_b = placeholders.get("p2")
+        if not actor_a or not actor_b:
+            raise ValueError("Event placeholders must include p1 and p2")
+        if actor_a == actor_b:
+            raise ValueError(f"Event pair must include two different people: {actor_a}")
+        return actor_a, actor_b
+
+    def _apply_event_social_and_mood(
+        self,
+        actor_a: str,
+        actor_b: str,
+        relation_delta: int,
+        mood_delta: int,
+    ) -> None:
+        if relation_delta == 0 or mood_delta == 0:
+            raise ValueError(
+                f"Event social tags are not ready: relation_delta={relation_delta}, mood_delta={mood_delta}"
+            )
+        if actor_a not in self.social_graph or actor_b not in self.social_graph[actor_a]:
+            raise KeyError(f"Unknown social edge: {actor_a}<->{actor_b}")
+
+        new_score = self._clamp_relation(self.social_graph[actor_a][actor_b] + relation_delta)
+        self.social_graph[actor_a][actor_b] = new_score
+        self.social_graph[actor_b][actor_a] = new_score
+
+        person_map = {person.name: person for person in (self.students + self.teachers)}
+        if actor_a not in person_map or actor_b not in person_map:
+            raise KeyError(f"Event actors missing from engine state: {actor_a}, {actor_b}")
+        person_map[actor_a].mood = self._clamp_mood(person_map[actor_a].mood + mood_delta)
+        person_map[actor_b].mood = self._clamp_mood(person_map[actor_b].mood + mood_delta)
 
     def _try_unlock_skill(self, student: Person, logs: List[str]) -> None:
         target_subj = random.choice(CORE_SUBJECTS)
@@ -287,6 +367,11 @@ class BeingEngine:
                 "stress": self.protagonist.stress,
                 "fatigue": self.protagonist.fatigue,
                 "focus_subjects": list(self.protagonist.focus_subjects),
+                "social_top_links": sorted(
+                    self.social_graph[self.protagonist.name].items(),
+                    key=lambda item: item[1],
+                    reverse=True,
+                )[:5],
             },
             "engine_state": self.to_state().model_dump(mode="json"),
         }

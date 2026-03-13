@@ -56,6 +56,38 @@
 
 ## Test Workflow
 
+### 0) Rerun hygiene (default, required)
+- Any logic/config/prompt/event-pool change that affects generation must start from a clean runtime output state.
+- Default behavior is **archive-then-rerun** (do not continue from stale `save_state.json`).
+
+```bash
+ts=$(date +%Y%m%d_%H%M%S)
+archive_dir="archive/cleanup_${ts}"
+mkdir -p "$archive_dir/novel_chapters" "$archive_dir/test_reports" "$archive_dir/events_extraction"
+
+shopt -s nullglob
+for f in novel_chapters/Chapter_*.txt; do mv "$f" "$archive_dir/novel_chapters/"; done
+for f in save_state.json simulation_trace.jsonl plot_summary.txt world_settings.json weekly_script.json; do
+  [ -e "$f" ] && mv "$f" "$archive_dir/"
+done
+for f in events_extraction/raw_moments.jsonl events_extraction/moments_extracted.jsonl events_extraction/.agent_events_pid; do
+  [ -e "$f" ] && mv "$f" "$archive_dir/events_extraction/"
+done
+for d in __pycache__ events_extraction/__pycache__ .pytest_cache; do
+  [ -d "$d" ] && mv "$d" "$archive_dir/"
+done
+mkdir -p test_reports
+```
+
+Then regenerate from scratch:
+```bash
+uv run python generate_full_plan.py
+```
+- Optional chapter rerun:
+```bash
+uv run python main.py --chapter-range 1-5
+```
+
 ### A) Fast local gate (before commit)
 1. Static compile:
 ```bash
