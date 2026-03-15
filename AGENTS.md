@@ -2,6 +2,23 @@
 
 ## Code Standards
 
+### 0) Quality Improvements (2026-03-14)
+
+#### 2026-03-14: Code Quality Enhancements
+- **Config simplification**: Removed complex metaclass lazy loading; prompts now load at module import time for reliability
+- **Type annotations**: Added complete type hints to Config class (e.g., `tuple[str, ...]` for `ELITE_TAGS`)
+- **Cache mechanism**: NPCData uses ClassVar caches with manual memoization (not `lru_cache`) for testability
+- **Error handling**: All DB methods raise `ValueError` with clear messages when data is missing
+- **Code organization**: 
+  - Imports cleaned up (removed unused `ClassVar`, `TypedDict`)
+  - Line formatting standardized (max 88 chars)
+  - Docstrings removed where code is self-explanatory
+
+#### Previous Improvements
+- **API resilience**: Timeout (90s) + retry (3 attempts, exponential backoff) in `ai_writer.py`
+- **Performance**: Social graph validation runs only in debug mode (skip O(n²) in production)
+- **Input validation**: Event records validated before DB sync in `events_extraction/`
+
 ### 1) Runtime and tooling
 - Use `uv` as the only Python workflow tool (`uv run ...`).
 - Do not reintroduce ad-hoc `requirements`-first flows.
@@ -110,15 +127,32 @@ uv run pytest -q tests
 Current canonical suite includes:
 - `test_00_api_key.py` (API connectivity and key checks)
 - `test_10_static_checks.py` (compile + pyright)
+- `test_40_fail_fast_semantics.py` (fail-fast validation)
+- `test_41_schema_validation.py` (Pydantic schema enforcement)
+- `test_42_engine_state_roundtrip.py` (state serialization)
+- `test_43_presenters.py` (view rendering)
+- `test_44_data_boundary_models.py` (boundary contracts)
+- `test_45_person_unit.py` (Person class unit tests - TDD ready)
+- `test_46_person_elite_semantics.py` (elite vs normal semantics)
+- `test_47_engine_business.py` (BeingEngine core logic - TDD ready)
+- `test_49_database_fail_fast.py` (DB fail-fast)
+- `test_50_event_social_mood.py` (event and social graph)
 - `test_20_generate_plan.py` (plan generation)
 - `test_30_run_one_chapter.py` (single chapter generation)
 - `test_40+` semantic/contract fail-fast and boundary model tests
 
 ### C) Recommended execution order for diagnosis
 1. `test_10_static_checks.py`
-2. `test_20_generate_plan.py`
-3. `test_30_run_one_chapter.py`
-4. Full suite (`tests/`) for final verification
+2. `test_45_person_unit.py` + `test_47_engine_business.py` (unit tests)
+3. Full suite (`tests/`) for final verification
+
+### D) TDD Development Guidelines (2026-03-15)
+- **Red-Green-Refactor**: Write failing test first, implement minimal code, then refactor
+- **Unit test priority**: `test_45_person_unit.py` and `test_47_engine_business.py` are TDD-ready
+- **Test isolation**: Each test should be independent and repeatable
+- **Boundary testing**: Include tests for edge cases, null values, and error conditions
+- **Business rule coverage**: Tests verify exam scores, growth multipliers, fatigue, breakdown logic
+- **Fail-fast semantics**: Invalid input should raise immediately with clear error messages
 
 ## Commit Checklist
 - Prompt changes are in `text_for_gen/prompts.yaml` + `config.py` keys only.

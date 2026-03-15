@@ -15,6 +15,10 @@ def run_cmd(
     timeout: int,
     env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
+    # Unset VIRTUAL_ENV to avoid uv warnings about path mismatch in isolated workspaces
+    if env is not None and "VIRTUAL_ENV" in env:
+        env = env.copy()
+        del env["VIRTUAL_ENV"]
     return subprocess.run(
         cmd,
         cwd=str(cwd),

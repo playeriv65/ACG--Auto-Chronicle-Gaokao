@@ -10,18 +10,18 @@ from helpers import run_cmd
 from novel_engine.core.contracts import RuntimeState
 
 
-def test_run_one_chapter_in_isolated_workspace(isolated_workspace: Path, repo_root: Path) -> None:
+def test_run_one_chapter_in_isolated_workspace(
+    isolated_workspace: Path, repo_root: Path
+) -> None:
     load_dotenv(dotenv_path=repo_root / ".env", override=False)
     env = dict(os.environ)
-    env["MODEL_NAME"] = env.get("TEST_MODEL_NAME", "glm-4.5-flash")
-    if env.get("GLM_API_KEY"):
-        env["API_KEY"] = env["GLM_API_KEY"]
-    if env.get("GLM_BASE_URL"):
-        env["BASE_URL"] = env["GLM_BASE_URL"]
-    env.setdefault("BASE_URL", "https://open.bigmodel.cn/api/paas/v4/")
 
-    if not (isolated_workspace / "world_settings.json").exists() or not (isolated_workspace / "weekly_script.json").exists():
-        prep_cmd = ["uv", "run", "python", "generate_full_plan.py"]
+    if (
+        not (isolated_workspace / "world_settings.json").exists()
+        or not (isolated_workspace / "weekly_script.json").exists()
+    ):
+        # Use --active flag to target the active virtual environment
+        prep_cmd = ["uv", "run", "--active", "python", "generate_full_plan.py"]
         prep_res = run_cmd(prep_cmd, cwd=isolated_workspace, timeout=300, env=env)
         assert prep_res.returncode == 0, (
             "CHAPTER_GENERATION_FAILED(prep_plan)\n"
@@ -30,7 +30,8 @@ def test_run_one_chapter_in_isolated_workspace(isolated_workspace: Path, repo_ro
             f"stderr={prep_res.stderr}"
         )
 
-    cmd = ["timeout", "240s", "uv", "run", "python", "main.py"]
+    # Use --active flag to target the active virtual environment
+    cmd = ["timeout", "240s", "uv", "run", "--active", "python", "main.py"]
     res = run_cmd(cmd, cwd=isolated_workspace, timeout=260, env=env)
 
     assert res.returncode in (0, 124), (
@@ -40,7 +41,9 @@ def test_run_one_chapter_in_isolated_workspace(isolated_workspace: Path, repo_ro
         f"stderr={res.stderr}"
     )
 
-    chapter_files = sorted((isolated_workspace / "novel_chapters").glob("Chapter_001_*.txt"))
+    chapter_files = sorted(
+        (isolated_workspace / "novel_chapters").glob("Chapter_001_*.txt")
+    )
     save_state = isolated_workspace / "save_state.json"
 
     chapter_ok = len(chapter_files) > 0
@@ -50,7 +53,9 @@ def test_run_one_chapter_in_isolated_workspace(isolated_workspace: Path, repo_ro
         validated_state = RuntimeState.model_validate(state)
         save_ok = validated_state.chapter_count >= 2
         if validated_state.engine_state.students:
-            assert all(skill.name for skill in validated_state.engine_state.students[0].skills)
+            assert all(
+                skill.name for skill in validated_state.engine_state.students[0].skills
+            )
 
     assert chapter_ok or save_ok, (
         "CHAPTER_GENERATION_FAILED(output_validation)\n"

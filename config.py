@@ -25,8 +25,21 @@ def _require_prompt_str(prompts: Mapping[str, Any], *path: str) -> str:
             raise RuntimeError(f"Missing prompts.yaml key: {'.'.join(visited)}")
         current = current[key]
     if not isinstance(current, str):
-        raise RuntimeError(f"Invalid prompts.yaml value type for {'.'.join(path)}: expected str")
+        raise RuntimeError(
+            f"Invalid prompts.yaml value type for {'.'.join(path)}: expected str"
+        )
     return current
+
+
+def _load_prompts() -> dict[str, Any]:
+    with open("text_for_gen/prompts.yaml", "r", encoding="utf-8") as f:
+        prompts_raw = yaml.safe_load(f)
+        if not isinstance(prompts_raw, dict):
+            raise RuntimeError("Invalid prompts.yaml format: expected mapping")
+        return prompts_raw
+
+
+_prompts = _load_prompts()
 
 
 class Config:
@@ -36,31 +49,7 @@ class Config:
 
     MAX_TOKENS: int = 16384
     TEMPERATURE: float = 0.7
-    ENABLE_THINKING: bool = True
     STREAM_OUTPUT: bool = os.getenv("STREAM_OUTPUT", "0") == "1"
-
-    with open("text_for_gen/prompts.yaml", "r", encoding="utf-8") as f:
-        _prompts_raw = yaml.safe_load(f)
-        if not isinstance(_prompts_raw, dict):
-            raise RuntimeError("Invalid prompts.yaml format: expected mapping")
-        _prompts: dict[str, Any] = _prompts_raw
-        SYSTEM_PROMPT: str = f"{_require_prompt_str(_prompts, 'writer_prompt')}\n{_require_prompt_str(_prompts, 'background_prompt')}"
-
-        CHAPTER_END_MARKER: str = _require_prompt_str(_prompts, "ai_writer", "chapter_end_marker")
-        CONTINUE_EXPAND_PROMPT: str = _require_prompt_str(_prompts, "ai_writer", "continue_expand_prompt")
-        TRUNCATION_NOTICE: str = _require_prompt_str(_prompts, "ai_writer", "truncation_notice")
-        SCENE_USER_PROMPT_TEMPLATE: str = _require_prompt_str(_prompts, "ai_writer", "scene", "user_template")
-        QUIZ_SYSTEM_PROMPT: str = _require_prompt_str(_prompts, "ai_writer", "quiz", "system")
-        QUIZ_USER_PROMPT_TEMPLATE: str = _require_prompt_str(_prompts, "ai_writer", "quiz", "user_template")
-        SUMMARY_SYSTEM_PROMPT: str = _require_prompt_str(_prompts, "ai_writer", "summary", "system")
-        SUMMARY_INSTRUCTION_TEMPLATE: str = _require_prompt_str(_prompts, "ai_writer", "summary", "instruction_template")
-        SUMMARY_USER_PROMPT_TEMPLATE: str = _require_prompt_str(_prompts, "ai_writer", "summary", "user_template")
-        MAIN_SCENE_STATS_CONTEXT: str = _require_prompt_str(_prompts, "main", "scene_stats_context")
-        MAIN_SYSTEM_INSTRUCTION_TEMPLATE: str = _require_prompt_str(_prompts, "main", "system_instruction_template")
-        MAIN_TIME_ANCHOR_TEMPLATE: str = _require_prompt_str(_prompts, "main", "time_anchor_template")
-        MAIN_TIME_GUARDRAIL_TEMPLATE: str = _require_prompt_str(_prompts, "main", "time_guardrail_template")
-        MAIN_SCENE_PROMPT_TEMPLATE: str = _require_prompt_str(_prompts, "main", "scene_prompt_template")
-        MAIN_QUIZ_EMPTY_TEXT: str = _require_prompt_str(_prompts, "main", "quiz_empty_text")
 
     PATHS: Dict[str, str] = {
         "WORLD_SETTINGS": "world_settings.json",
@@ -100,7 +89,7 @@ class Config:
     PROTAGONIST_MASTERY_MAX: int = 400
     PROTAGONIST_INFO_MASTERY: float = 0.0
 
-    ELITE_TAGS = ("天赋怪", "卷王")
+    ELITE_TAGS: tuple[str, ...] = ("天赋怪", "卷王")
     ELITE_TALENT_MIN: int = 120
     ELITE_TALENT_MAX: int = 180
     NORMAL_TALENT_MIN: int = 90
@@ -136,3 +125,51 @@ class Config:
     EXAM_SCORE_DIVISOR: float = 50.0
     EXAM_PENALTY_DIVISOR: float = 500.0
     SKILL_SUBJECT_BONUS: float = 100.0
+
+    SYSTEM_PROMPT: str = (
+        f"{_require_prompt_str(_prompts, 'writer_prompt')}\n"
+        f"{_require_prompt_str(_prompts, 'background_prompt')}"
+    )
+    CHAPTER_END_MARKER: str = _require_prompt_str(
+        _prompts, "ai_writer", "chapter_end_marker"
+    )
+    CONTINUE_EXPAND_PROMPT: str = _require_prompt_str(
+        _prompts, "ai_writer", "continue_expand_prompt"
+    )
+    TRUNCATION_NOTICE: str = _require_prompt_str(
+        _prompts, "ai_writer", "truncation_notice"
+    )
+    SCENE_USER_PROMPT_TEMPLATE: str = _require_prompt_str(
+        _prompts, "ai_writer", "scene", "user_template"
+    )
+    QUIZ_SYSTEM_PROMPT: str = _require_prompt_str(
+        _prompts, "ai_writer", "quiz", "system"
+    )
+    QUIZ_USER_PROMPT_TEMPLATE: str = _require_prompt_str(
+        _prompts, "ai_writer", "quiz", "user_template"
+    )
+    SUMMARY_SYSTEM_PROMPT: str = _require_prompt_str(
+        _prompts, "ai_writer", "summary", "system"
+    )
+    SUMMARY_INSTRUCTION_TEMPLATE: str = _require_prompt_str(
+        _prompts, "ai_writer", "summary", "instruction_template"
+    )
+    SUMMARY_USER_PROMPT_TEMPLATE: str = _require_prompt_str(
+        _prompts, "ai_writer", "summary", "user_template"
+    )
+    MAIN_SCENE_STATS_CONTEXT: str = _require_prompt_str(
+        _prompts, "main", "scene_stats_context"
+    )
+    MAIN_SYSTEM_INSTRUCTION_TEMPLATE: str = _require_prompt_str(
+        _prompts, "main", "system_instruction_template"
+    )
+    MAIN_TIME_ANCHOR_TEMPLATE: str = _require_prompt_str(
+        _prompts, "main", "time_anchor_template"
+    )
+    MAIN_TIME_GUARDRAIL_TEMPLATE: str = _require_prompt_str(
+        _prompts, "main", "time_guardrail_template"
+    )
+    MAIN_SCENE_PROMPT_TEMPLATE: str = _require_prompt_str(
+        _prompts, "main", "scene_prompt_template"
+    )
+    MAIN_QUIZ_EMPTY_TEXT: str = _require_prompt_str(_prompts, "main", "quiz_empty_text")
