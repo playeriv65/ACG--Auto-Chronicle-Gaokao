@@ -4,7 +4,24 @@
 
 ### 0) Quality Improvements (2026-03-14)
 
-#### 2026-03-14: Code Quality Enhancements
+#### 2026-03-15: Social Network and Daily Life System
+- **Social network module** (`novel_engine/core/social_network.py`): 
+  - Relationship types: 陌生人，朋友，死党，竞争对手，暗恋，暧昧，崇拜，嫉妒，师生关系，敌对，小团体成员，室友，同桌
+  - Relationship metrics: score (-100~100), trust (0~100), intimacy (0~100), conflicts, positive_interactions, memories
+  - Social circles: 核心圈 (strength>=120), 熟人圈 (60-119), 泛泛之交 (<60)
+  - Auto-evolution of relationship types based on interaction history
+  - Interest affinity calculation for relationship building
+- **Daily events generator** (`novel_engine/core/daily_events.py`):
+  - 6 scenes: 教室，食堂，操场，宿舍，走廊，图书馆
+  - 30+ daily life event templates with realistic high school interactions
+  - Context-aware event generation based on relationships and intimacy levels
+  - Events include relation_delta, mood_delta, trust_delta, intimacy_delta
+- **Enhanced Person model**:
+  - Added `interests` (List[str]) - hobbies and interests
+  - Added `values` (List[str]) - personal values and beliefs
+  - Expanded archetypes to 20 types (学霸型，社交型，特长型，性格型)
+  - Expanded background data: 15 families, 20 quirks, 15 flaws
+  - Expanded database: 20 interests, 10 specialties, 8 values
 - **Config simplification**: Removed complex metaclass lazy loading; prompts now load at module import time for reliability
 - **Type annotations**: Added complete type hints to Config class (e.g., `tuple[str, ...]` for `ELITE_TAGS`)
 - **Cache mechanism**: NPCData uses ClassVar caches with manual memoization (not `lru_cache`) for testability

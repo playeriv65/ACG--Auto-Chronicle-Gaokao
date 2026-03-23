@@ -73,7 +73,9 @@ def _load_checkpoint(path: Path) -> int:
 def _save_checkpoint(path: Path, next_index: int) -> None:
     payload = {"next_index": next_index, "updated_at": int(time.time())}
     tmp_path = path.with_suffix(path.suffix + ".tmp")
-    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     tmp_path.replace(path)
 
 
@@ -84,11 +86,11 @@ def _build_user_prompt(items: list[dict[str, str]]) -> str:
 
     return (
         "请清洗下面事件，仅输出 JSON。\n"
-        "输入格式：{\"items\":[{\"id\":\"e_xxx\",\"content\":\"...\"}]}\n"
+        '输入格式：{"items":[{"id":"e_xxx","content":"..."}]}\n'
         "输出格式严格为：\n"
         "{\n"
-        "  \"items\": [\n"
-        f"    {{\"id\":\"e_xxx\",\"content\":\"{alias_example}\"}}\n"
+        '  "items": [\n'
+        f'    {{"id":"e_xxx","content":"{alias_example}"}}\n'
         "  ]\n"
         "}\n\n"
         "硬性要求：\n"
@@ -160,11 +162,12 @@ def clean_with_llm(
                         ],
                         temperature=0.1,
                         max_tokens=3200,
-                        extra_body={"chat_template_kwargs": {"enable_thinking": False, "clear_thinking": True}},
                         stream=False,
                     )
                     message = completion.choices[0].message
-                    response_text = message.content or getattr(message, "reasoning_content", None)
+                    response_text = message.content or getattr(
+                        message, "reasoning_content", None
+                    )
                     if not response_text:
                         raise RuntimeError(f"Empty cleaner response at index {i}")
 
@@ -180,7 +183,9 @@ def clean_with_llm(
                             raise RuntimeError("Cleaner output item is not object")
                         event_id = obj.get("id")
                         content = obj.get("content")
-                        if not isinstance(event_id, str) or not isinstance(content, str):
+                        if not isinstance(event_id, str) or not isinstance(
+                            content, str
+                        ):
                             raise RuntimeError("Cleaner output missing id/content")
                         output_ids.append(event_id)
                         normalized_content = content.strip()
@@ -190,13 +195,21 @@ def clean_with_llm(
                             or "某老师" in normalized_content
                             or "某家长" in normalized_content
                         ):
-                            raise RuntimeError("Cleaner output contains forbidden 某X pattern")
+                            raise RuntimeError(
+                                "Cleaner output contains forbidden 某X pattern"
+                            )
                         if not re.search(r"\{p[1-4]\}", normalized_content):
-                            raise RuntimeError("Cleaner output missing {pN} placeholders")
-                        current_output_items.append({"id": event_id, "content": normalized_content})
+                            raise RuntimeError(
+                                "Cleaner output missing {pN} placeholders"
+                            )
+                        current_output_items.append(
+                            {"id": event_id, "content": normalized_content}
+                        )
 
                     if output_ids != input_ids:
-                        raise RuntimeError("Cleaner output ids/order mismatch with input batch")
+                        raise RuntimeError(
+                            "Cleaner output ids/order mismatch with input batch"
+                        )
                     output_items = current_output_items
                     break
                 except Exception as exc:  # noqa: BLE001
@@ -220,14 +233,36 @@ def clean_with_llm(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Clean agent_events.jsonl with LLM rewrite.")
-    parser.add_argument("--input", type=str, default=str(INPUT_FILE), help="Input JSONL path.")
-    parser.add_argument("--output", type=str, default=str(DEFAULT_OUTPUT_FILE), help="Output JSONL path.")
-    parser.add_argument("--batch-size", type=int, default=20, help="Batch size per API call.")
-    parser.add_argument("--sleep", type=float, default=0.2, help="Sleep seconds between API calls.")
-    parser.add_argument("--model", type=str, default=None, help="Override MODEL_NAME from env.")
-    parser.add_argument("--reset", action="store_true", help="Reset output and checkpoint.")
-    parser.add_argument("--max-items", type=int, default=None, help="Only clean first N rows (for trial).")
+    parser = argparse.ArgumentParser(
+        description="Clean agent_events.jsonl with LLM rewrite."
+    )
+    parser.add_argument(
+        "--input", type=str, default=str(INPUT_FILE), help="Input JSONL path."
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=str(DEFAULT_OUTPUT_FILE),
+        help="Output JSONL path.",
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=20, help="Batch size per API call."
+    )
+    parser.add_argument(
+        "--sleep", type=float, default=0.2, help="Sleep seconds between API calls."
+    )
+    parser.add_argument(
+        "--model", type=str, default=None, help="Override MODEL_NAME from env."
+    )
+    parser.add_argument(
+        "--reset", action="store_true", help="Reset output and checkpoint."
+    )
+    parser.add_argument(
+        "--max-items",
+        type=int,
+        default=None,
+        help="Only clean first N rows (for trial).",
+    )
     args = parser.parse_args()
     clean_with_llm(
         input_file=Path(args.input),

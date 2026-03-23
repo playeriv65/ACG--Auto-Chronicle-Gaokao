@@ -72,9 +72,13 @@ def _ensure_event_pool_schema(cursor: sqlite3.Cursor) -> None:
     cursor.execute("PRAGMA table_info(event_pool)")
     cols = {row[1] for row in cursor.fetchall()}
     if "relation_delta" not in cols:
-        cursor.execute("ALTER TABLE event_pool ADD COLUMN relation_delta INTEGER NOT NULL DEFAULT 0")
+        cursor.execute(
+            "ALTER TABLE event_pool ADD COLUMN relation_delta INTEGER NOT NULL DEFAULT 0"
+        )
     if "mood_delta" not in cols:
-        cursor.execute("ALTER TABLE event_pool ADD COLUMN mood_delta INTEGER NOT NULL DEFAULT 0")
+        cursor.execute(
+            "ALTER TABLE event_pool ADD COLUMN mood_delta INTEGER NOT NULL DEFAULT 0"
+        )
 
 
 def _load_legacy_events() -> list[dict[str, Any]]:
@@ -83,7 +87,9 @@ def _load_legacy_events() -> list[dict[str, Any]]:
     conn = sqlite3.connect(DB_PATH)
     try:
         cursor = conn.cursor()
-        rows = cursor.execute("SELECT season, description, effect FROM events").fetchall()
+        rows = cursor.execute(
+            "SELECT season, description, effect FROM events"
+        ).fetchall()
     finally:
         conn.close()
 
@@ -107,7 +113,9 @@ def _load_agent_events() -> list[dict[str, Any]]:
     if not AGENT_EVENTS_PATH.exists():
         return []
     result: list[dict[str, Any]] = []
-    for idx, line in enumerate(AGENT_EVENTS_PATH.read_text(encoding="utf-8").splitlines(), start=1):
+    for idx, line in enumerate(
+        AGENT_EVENTS_PATH.read_text(encoding="utf-8").splitlines(), start=1
+    ):
         s = line.strip()
         if not s:
             continue
@@ -130,7 +138,11 @@ def _load_agent_events() -> list[dict[str, Any]]:
 def _load_done_uids(path: Path) -> set[str]:
     if not path.exists():
         return set()
-    return {line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()}
+    return {
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
 
 
 def _load_checkpoint(path: Path) -> dict[str, Any]:
@@ -146,7 +158,9 @@ def _save_checkpoint(path: Path, *, done_count: int, last_uid: str) -> None:
         "last_uid": last_uid,
         "updated_at": int(time.time()),
     }
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
 
 
 def _normalize_template(text: str) -> str:
@@ -205,8 +219,31 @@ def _validate_item(item: dict[str, Any], expected_uid: str) -> dict[str, Any]:
 
 
 def _estimate_social_deltas(effect: str, text: str) -> tuple[int, int]:
-    negative_keywords = ("拒绝", "嘲笑", "争执", "冲突", "警告", "尴尬", "失望", "心虚", "冷战", "羞辱", "责备")
-    positive_keywords = ("帮助", "鼓励", "安慰", "合作", "支持", "道谢", "邀请", "请教", "和解", "分享")
+    negative_keywords = (
+        "拒绝",
+        "嘲笑",
+        "争执",
+        "冲突",
+        "警告",
+        "尴尬",
+        "失望",
+        "心虚",
+        "冷战",
+        "羞辱",
+        "责备",
+    )
+    positive_keywords = (
+        "帮助",
+        "鼓励",
+        "安慰",
+        "合作",
+        "支持",
+        "道谢",
+        "邀请",
+        "请教",
+        "和解",
+        "分享",
+    )
 
     if any(k in effect for k in ("mood-", "stress+", "fatigue+")):
         return -4, -3
@@ -250,7 +287,9 @@ def _heuristic_tag_row(row: dict[str, Any]) -> dict[str, Any]:
     )
 
 
-def _chunked(items: list[dict[str, Any]], batch_size: int) -> list[list[dict[str, Any]]]:
+def _chunked(
+    items: list[dict[str, Any]], batch_size: int
+) -> list[list[dict[str, Any]]]:
     return [items[i : i + batch_size] for i in range(0, len(items), batch_size)]
 
 
@@ -276,7 +315,9 @@ def _extract_json_object(text: str) -> dict[str, Any]:
     raise ValueError("LLM output is not a valid JSON object")
 
 
-def _llm_tag_batch(client: OpenAI, model_name: str, batch: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def _llm_tag_batch(
+    client: OpenAI, model_name: str, batch: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
     payload = [
         {
             "uid": item["uid"],
@@ -286,7 +327,9 @@ def _llm_tag_batch(client: OpenAI, model_name: str, batch: list[dict[str, Any]])
         }
         for item in batch
     ]
-    prompt = USER_TEMPLATE.format(payload=json.dumps(payload, ensure_ascii=False, indent=2))
+    prompt = USER_TEMPLATE.format(
+        payload=json.dumps(payload, ensure_ascii=False, indent=2)
+    )
     raw: dict[str, Any] | None = None
     last_exc: Exception | None = None
     for _ in range(3):
@@ -299,7 +342,6 @@ def _llm_tag_batch(client: OpenAI, model_name: str, batch: list[dict[str, Any]])
                 ],
                 temperature=0.1,
                 max_tokens=3000,
-                extra_body={"chat_template_kwargs": {"enable_thinking": False, "clear_thinking": True}},
                 stream=False,
                 timeout=90,
             )
@@ -317,7 +359,9 @@ def _llm_tag_batch(client: OpenAI, model_name: str, batch: list[dict[str, Any]])
     items = raw.get("items")
     if not isinstance(items, list):
         raise ValueError("LLM output missing items list")
-    by_uid = {item["uid"]: item for item in items if isinstance(item, dict) and "uid" in item}
+    by_uid = {
+        item["uid"]: item for item in items if isinstance(item, dict) and "uid" in item
+    }
     validated: list[dict[str, Any]] = []
     for row in batch:
         uid = row["uid"]
@@ -410,7 +454,10 @@ def run(
     pending = [row for row in rows if row["uid"] not in done_uids]
     if limit is not None:
         pending = pending[:limit]
-    print(f"[rebuild] total={len(rows)} done={len(done_uids)} pending={len(pending)}", flush=True)
+    print(
+        f"[rebuild] total={len(rows)} done={len(done_uids)} pending={len(pending)}",
+        flush=True,
+    )
 
     rebuilt_rows: dict[str, dict[str, Any]] = {}
     if OUTPUT_PATH.exists():
@@ -448,22 +495,33 @@ def run(
                 done_count=len(done_uids),
                 last_uid=batch[-1]["uid"],
             )
-            print(f"[rebuild] batch={idx}/{len(batches)} done={len(done_uids)}", flush=True)
+            print(
+                f"[rebuild] batch={idx}/{len(batches)} done={len(done_uids)}",
+                flush=True,
+            )
             if sleep_sec > 0:
                 time.sleep(sleep_sec)
 
-    target_rows = rows if limit is None else rows[:len(done_uids)]
-    final_rows = [rebuilt_rows[row["uid"]] for row in target_rows if row["uid"] in rebuilt_rows]
+    target_rows = rows if limit is None else rows[: len(done_uids)]
+    final_rows = [
+        rebuilt_rows[row["uid"]] for row in target_rows if row["uid"] in rebuilt_rows
+    ]
     if len(final_rows) != len(target_rows):
-        raise RuntimeError(f"Rebuild incomplete: got={len(final_rows)} expected={len(target_rows)}")
+        raise RuntimeError(
+            f"Rebuild incomplete: got={len(final_rows)} expected={len(target_rows)}"
+        )
 
     _write_rebuilt_file(final_rows)
     _sync_to_db(final_rows)
-    print(f"[rebuild] completed rows={len(final_rows)} output={OUTPUT_PATH}", flush=True)
+    print(
+        f"[rebuild] completed rows={len(final_rows)} output={OUTPUT_PATH}", flush=True
+    )
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Rebuild event_pool with social deltas by LLM")
+    parser = argparse.ArgumentParser(
+        description="Rebuild event_pool with social deltas by LLM"
+    )
     parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--batch-size", type=int, default=12)
     parser.add_argument("--sleep", type=float, default=0.0)

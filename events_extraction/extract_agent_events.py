@@ -18,8 +18,7 @@ CHECKPOINT_FILE = Path("events_extraction/.agent_events_checkpoint.json")
 DB_FILE = Path("novel_engine/data/storage/world_data.db")
 
 SYSTEM_PROMPT = (
-    "你是校园互动事件抽取器。"
-    "目标是一次性输出可直接用于agent模拟的最终事件模板。"
+    "你是校园互动事件抽取器。目标是一次性输出可直接用于agent模拟的最终事件模板。"
 )
 
 USER_TEMPLATE = """从下述文本提取 2-6 条“关键互动事件模板”。
@@ -48,6 +47,35 @@ PREFIX_PATTERN = re.compile(r"^【[^【】]{1,8}·[^【】]{1,12}】")
 PLACEHOLDER_PATTERN = re.compile(r"\{p([1-4])\}")
 ANY_PLACEHOLDER_PATTERN = re.compile(r"\{p(\d+)\}")
 
+FORBIDDEN_PATTERNS = ["某人", "某同学", "某老师", "某家长", re.compile(r"[A-Z]/[A-Z]")]
+
+
+def _validate_event_record(event_text: str) -> tuple[bool, str]:
+    if not event_text.startswith("【"):
+        return False, "Missing 【】 prefix"
+
+    match = PREFIX_PATTERN.match(event_text)
+    if not match:
+        return False, "Invalid 【时间·地点】prefix format"
+
+    placeholders = PLACEHOLDER_PATTERN.findall(event_text)
+    if not placeholders:
+        return False, "Missing required placeholders {p1}-{p4}"
+
+    expected = set(range(1, max(int(p) for p in placeholders) + 1))
+    if set(int(p) for p in placeholders) != expected:
+        return False, "Placeholder sequence incomplete"
+
+    for pattern in FORBIDDEN_PATTERNS:
+        if isinstance(pattern, str):
+            if pattern in event_text:
+                return False, f"Contains forbidden pattern: {pattern}"
+        else:
+            if pattern.search(event_text):
+                return False, f"Contains forbidden regex pattern: {pattern.pattern}"
+
+    return True, ""
+
 
 def _load_jsonl(path: Path) -> list[dict[str, Any]]:
     rows: list[dict[str, Any]] = []
@@ -62,7 +90,11 @@ def _load_jsonl(path: Path) -> list[dict[str, Any]]:
 def _load_processed_chunks(path: Path) -> set[str]:
     if not path.exists():
         return set()
-    return {line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()}
+    return {
+        line.strip()
+        for line in path.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    }
 
 
 def _load_checkpoint(path: Path) -> dict[str, Any]:
@@ -74,7 +106,9 @@ def _load_checkpoint(path: Path) -> dict[str, Any]:
     return data
 
 
-def _save_checkpoint(path: Path, *, chunk_id: str, processed_chunks: int, event_counter: int) -> None:
+def _save_checkpoint(
+    path: Path, *, chunk_id: str, processed_chunks: int, event_counter: int
+) -> None:
     payload = {
         "last_chunk_id": chunk_id,
         "processed_chunks": processed_chunks,
@@ -82,7 +116,9 @@ def _save_checkpoint(path: Path, *, chunk_id: str, processed_chunks: int, event_
         "updated_at": int(time.time()),
     }
     tmp_path = path.with_suffix(path.suffix + ".tmp")
-    tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+    )
     tmp_path.replace(path)
 
 
@@ -122,7 +158,10 @@ def _normalize_event_text(raw: Any) -> str | None:
         return None
     if "A向B" in text or "A和B" in text or "A/B" in text:
         return None
-    if any(bad in text for bad in ("某人", "某同学", "某老师", "某家长", "{actor}", "{target}")):
+    if any(
+        bad in text
+        for bad in ("某人", "某同学", "某老师", "某家长", "{actor}", "{target}")
+    ):
         return None
     any_placeholders = ANY_PLACEHOLDER_PATTERN.findall(text)
     if len(any_placeholders) < 2:
@@ -221,9 +260,13 @@ def _sync_events_to_db(output_file: Path, db_file: Path) -> None:
         cursor.execute("PRAGMA table_info(event_pool)")
         cols = {row[1] for row in cursor.fetchall()}
         if "relation_delta" not in cols:
-            cursor.execute("ALTER TABLE event_pool ADD COLUMN relation_delta INTEGER NOT NULL DEFAULT 0")
+            cursor.execute(
+                "ALTER TABLE event_pool ADD COLUMN relation_delta INTEGER NOT NULL DEFAULT 0"
+            )
         if "mood_delta" not in cols:
-            cursor.execute("ALTER TABLE event_pool ADD COLUMN mood_delta INTEGER NOT NULL DEFAULT 0")
+            cursor.execute(
+                "ALTER TABLE event_pool ADD COLUMN mood_delta INTEGER NOT NULL DEFAULT 0"
+            )
         before_changes = conn.total_changes
         rows = [("merged", "ANY", t, "", 4, 3, 1) for t in templates]
         cursor.executemany(
@@ -298,12 +341,13 @@ def run(
                             ],
                             temperature=0.2,
                             max_tokens=1200,
-                            extra_body={"chat_template_kwargs": {"enable_thinking": False, "clear_thinking": True}},
                             timeout=request_timeout_sec,
                             stream=False,
                         )
                         message = completion.choices[0].message
-                        content = message.content or getattr(message, "reasoning_content", None)
+                        content = message.content or getattr(
+                            message, "reasoning_content", None
+                        )
                         if content:
                             break
                     except Exception as exc:  # noqa: BLE001
@@ -312,7 +356,10 @@ def run(
 
                 if not content:
                     if last_error:
-                        print(f"[{idx}/{len(pending)}] {chunk_id} -> request_failed: {last_error}", flush=True)
+                        print(
+                            f"[{idx}/{len(pending)}] {chunk_id} -> request_failed: {last_error}",
+                            flush=True,
+                        )
                         done_f.write(chunk_id + "\n")
                         done_f.flush()
                         done_chunks.add(chunk_id)
@@ -323,7 +370,10 @@ def run(
                             event_counter=event_counter,
                         )
                         continue
-                    print(f"[{idx}/{len(pending)}] {chunk_id} -> empty_response", flush=True)
+                    print(
+                        f"[{idx}/{len(pending)}] {chunk_id} -> empty_response",
+                        flush=True,
+                    )
                     done_f.write(chunk_id + "\n")
                     done_f.flush()
                     done_chunks.add(chunk_id)
@@ -338,7 +388,10 @@ def run(
                 try:
                     payload = _extract_json_payload(content)
                 except Exception as exc:  # noqa: BLE001
-                    print(f"[{idx}/{len(pending)}] {chunk_id} -> invalid_json: {exc}", flush=True)
+                    print(
+                        f"[{idx}/{len(pending)}] {chunk_id} -> invalid_json: {exc}",
+                        flush=True,
+                    )
                     done_f.write(chunk_id + "\n")
                     done_f.flush()
                     done_chunks.add(chunk_id)
@@ -362,11 +415,22 @@ def run(
                             processed_chunks=len(done_chunks),
                             event_counter=event_counter,
                         )
-                        print(f"[{idx}/{len(pending)}] {chunk_id} -> 0 events (filtered)", flush=True)
+                        print(
+                            f"[{idx}/{len(pending)}] {chunk_id} -> 0 events (filtered)",
+                            flush=True,
+                        )
                         continue
                     raise
 
                 for event_text in events:
+                    is_valid, error_msg = _validate_event_record(event_text)
+                    if not is_valid:
+                        print(
+                            f"[{idx}/{len(pending)}] {chunk_id} -> event_validation_failed: {error_msg}",
+                            flush=True,
+                        )
+                        continue
+
                     out = {"id": f"e_{event_counter:07d}", "content": event_text}
                     out_f.write(json.dumps(out, ensure_ascii=False) + "\n")
                     event_counter += 1
@@ -381,7 +445,10 @@ def run(
                     processed_chunks=len(done_chunks),
                     event_counter=event_counter,
                 )
-                print(f"[{idx}/{len(pending)}] {chunk_id} -> {len(events)} events", flush=True)
+                print(
+                    f"[{idx}/{len(pending)}] {chunk_id} -> {len(events)} events",
+                    flush=True,
+                )
                 if sleep_sec > 0:
                     time.sleep(sleep_sec)
 
@@ -390,11 +457,21 @@ def run(
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Extract agent-interaction events from chunked fiction.")
-    parser.add_argument("--limit", type=int, default=None, help="Only process first N pending chunks.")
-    parser.add_argument("--sleep", type=float, default=0.2, help="Sleep seconds between API calls.")
-    parser.add_argument("--timeout", type=float, default=90.0, help="Per-request timeout in seconds.")
-    parser.add_argument("--model", type=str, default=None, help="Override MODEL_NAME from env.")
+    parser = argparse.ArgumentParser(
+        description="Extract agent-interaction events from chunked fiction."
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None, help="Only process first N pending chunks."
+    )
+    parser.add_argument(
+        "--sleep", type=float, default=0.2, help="Sleep seconds between API calls."
+    )
+    parser.add_argument(
+        "--timeout", type=float, default=90.0, help="Per-request timeout in seconds."
+    )
+    parser.add_argument(
+        "--model", type=str, default=None, help="Override MODEL_NAME from env."
+    )
     parser.add_argument(
         "--reset-progress",
         action="store_true",

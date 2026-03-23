@@ -1,20 +1,22 @@
 from __future__ import annotations
 
-"""Character model used by the simulation engine."""
-
 import math
 import random
 from typing import Dict, List, Sequence
 
 from config import Config
-from novel_engine.core.contracts import PersonProfile, PersonState, RoleType, SkillState, TraitType
+from novel_engine.core.contracts import (
+    PersonProfile,
+    PersonState,
+    RoleType,
+    SkillState,
+    TraitType,
+)
 from novel_engine.core.engine_constants import ALL_SUBJECTS_MARKER
 from novel_engine.data.database import Subject
 
 
 class Person:
-    """Represents one actor (student or teacher) in the world state."""
-
     def __init__(
         self,
         name: str,
@@ -27,6 +29,8 @@ class Person:
         quirk: str,
         flaw: str,
         traits: List[TraitType] | None = None,
+        interests: List[str] | None = None,
+        values: List[str] | None = None,
     ):
         self.name: str = name
         self.role: RoleType = role
@@ -38,6 +42,9 @@ class Person:
         self.family: str = family
         self.quirk: str = quirk
         self.flaw: str = flaw
+
+        self.interests: List[str] = list(interests or [])
+        self.values: List[str] = list(values or [])
 
         if role == "protagonist":
             self.talent = self._build_protagonist_talent()
@@ -64,21 +71,38 @@ class Person:
 
     def _build_protagonist_mastery(self) -> Dict[str, float]:
         mastery = {
-            subject: float(random.randint(Config.PROTAGONIST_MASTERY_MIN, Config.PROTAGONIST_MASTERY_MAX))
+            subject: float(
+                random.randint(
+                    Config.PROTAGONIST_MASTERY_MIN, Config.PROTAGONIST_MASTERY_MAX
+                )
+            )
             for subject in Subject.ALL
         }
         mastery[Subject.INFO] = Config.PROTAGONIST_INFO_MASTERY
         return mastery
 
     def _build_student_talent(self) -> Dict[str, int]:
-        talent_min = Config.ELITE_TALENT_MIN if self.is_elite else Config.NORMAL_TALENT_MIN
-        talent_max = Config.ELITE_TALENT_MAX if self.is_elite else Config.NORMAL_TALENT_MAX
-        return {subject: random.randint(talent_min, talent_max) for subject in Subject.ALL}
+        talent_min = (
+            Config.ELITE_TALENT_MIN if self.is_elite else Config.NORMAL_TALENT_MIN
+        )
+        talent_max = (
+            Config.ELITE_TALENT_MAX if self.is_elite else Config.NORMAL_TALENT_MAX
+        )
+        return {
+            subject: random.randint(talent_min, talent_max) for subject in Subject.ALL
+        }
 
     def _build_student_mastery(self) -> Dict[str, float]:
-        mastery_min = Config.ELITE_MASTERY_MIN if self.is_elite else Config.NORMAL_MASTERY_MIN
-        mastery_max = Config.ELITE_MASTERY_MAX if self.is_elite else Config.NORMAL_MASTERY_MAX
-        return {subject: float(random.randint(mastery_min, mastery_max)) for subject in Subject.ALL}
+        mastery_min = (
+            Config.ELITE_MASTERY_MIN if self.is_elite else Config.NORMAL_MASTERY_MIN
+        )
+        mastery_max = (
+            Config.ELITE_MASTERY_MAX if self.is_elite else Config.NORMAL_MASTERY_MAX
+        )
+        return {
+            subject: float(random.randint(mastery_min, mastery_max))
+            for subject in Subject.ALL
+        }
 
     def to_state(self) -> PersonState:
         return PersonState(
@@ -100,10 +124,11 @@ class Person:
             fatigue=self.fatigue,
             focus_subjects=self.focus_subjects,
             last_week_rank=self.last_week_rank,
+            interests=self.interests,
+            values=self.values,
         )
 
     def has_trait(self, trait: TraitType) -> bool:
-        """Business logic should branch on traits, not free-form tags."""
         return trait in self.traits
 
     @staticmethod
@@ -118,6 +143,8 @@ class Person:
             quirk=profile.quirk,
             flaw=profile.flaw,
             traits=list(profile.traits),
+            interests=list(profile.interests),
+            values=list(profile.values),
         )
 
     def to_profile(self) -> PersonProfile:
@@ -134,6 +161,8 @@ class Person:
             family=self.family,
             flaw=self.flaw,
             quirk=self.quirk,
+            interests=self.interests,
+            values=self.values,
         )
 
     @staticmethod
@@ -148,6 +177,8 @@ class Person:
             quirk=state.quirk,
             flaw=state.flaw,
             traits=list(state.traits),
+            interests=list(state.interests),
+            values=list(state.values),
         )
         person.talent = dict(state.talent)
         person.mastery = dict(state.mastery)
@@ -178,11 +209,17 @@ class Person:
         score = (base + skill_bonus) * talent_mod * (1.0 - penalty)
         return int(min(Config.EXAM_SCORE_CAP, score / Config.EXAM_SCORE_DIVISOR))
 
-    def plan_week(self, is_exam_week: bool, current_week: int, battle_subjects: Sequence[str]) -> None:
+    def plan_week(
+        self, is_exam_week: bool, current_week: int, battle_subjects: Sequence[str]
+    ) -> None:
         if battle_subjects and ALL_SUBJECTS_MARKER not in battle_subjects:
             self.focus_subjects = list(battle_subjects)
         else:
-            scores = {subject: self.mastery[subject] for subject in Subject.ALL if subject != Subject.INFO}
+            scores = {
+                subject: self.mastery[subject]
+                for subject in Subject.ALL
+                if subject != Subject.INFO
+            }
             if not scores:
                 raise ValueError(f"No score candidates for {self.name}")
             weakest = min(scores, key=lambda subject: scores[subject])
@@ -191,7 +228,11 @@ class Person:
         if is_exam_week:
             self.stress += Config.EXAM_STRESS_INCREMENT
 
-        if current_week > Config.INFO_OPTIONAL_START_WEEK and self.has_trait(self.INFO_TRACK_TRAIT) and not is_exam_week:
+        if (
+            current_week > Config.INFO_OPTIONAL_START_WEEK
+            and self.has_trait(self.INFO_TRACK_TRAIT)
+            and not is_exam_week
+        ):
             if random.random() < Config.INFO_OPTIONAL_FOCUS_PROB:
                 self.focus_subjects = [Subject.INFO]
 
@@ -199,11 +240,15 @@ class Person:
         if not self.focus_subjects:
             raise ValueError(f"focus_subjects is empty for {self.name}")
 
-        missing_mastery = [subject for subject in Subject.ALL if subject not in self.mastery]
+        missing_mastery = [
+            subject for subject in Subject.ALL if subject not in self.mastery
+        ]
         if missing_mastery:
             raise KeyError(f"Missing mastery keys for {self.name}: {missing_mastery}")
 
-        missing_talent = [subject for subject in Subject.ALL if subject not in self.talent]
+        missing_talent = [
+            subject for subject in Subject.ALL if subject not in self.talent
+        ]
         if missing_talent:
             raise KeyError(f"Missing talent keys for {self.name}: {missing_talent}")
 
@@ -223,7 +268,9 @@ class Person:
                 self.mastery[subject] = current + growth
                 self.fatigue += Config.FOCUS_FATIGUE_COST
             else:
-                self.mastery[subject] = current + growth * Config.NON_FOCUS_GROWTH_MULTIPLIER
+                self.mastery[subject] = (
+                    current + growth * Config.NON_FOCUS_GROWTH_MULTIPLIER
+                )
 
         if self.fatigue > Config.FATIGUE_BREAKDOWN_THRESHOLD:
             self.fatigue = Config.FATIGUE_RESET_AFTER_BREAKDOWN

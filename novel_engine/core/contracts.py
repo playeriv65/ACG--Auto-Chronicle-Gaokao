@@ -30,6 +30,8 @@ class PersonProfile(StrictModel):
     family: str
     flaw: str
     quirk: str
+    interests: List[str] = Field(default_factory=list)
+    values: List[str] = Field(default_factory=list)
 
 
 class SystemPrompt(StrictModel):
@@ -127,6 +129,8 @@ class PersonState(StrictModel):
     fatigue: int
     focus_subjects: List[str]
     last_week_rank: int
+    interests: List[str] = Field(default_factory=list)
+    values: List[str] = Field(default_factory=list)
 
 
 class EngineState(StrictModel):
